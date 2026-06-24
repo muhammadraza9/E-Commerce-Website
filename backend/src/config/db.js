@@ -16,6 +16,8 @@ const adapter = new PrismaMariaDb({
   ssl: {
     ca: caCert,
   },
+  connectTimeout: 20000,
+  connectionLimit: 5,
 });
 
 const prisma = new PrismaClient({
