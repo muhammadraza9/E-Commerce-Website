@@ -1,7 +1,11 @@
+const fs = require("fs");
+const path = require("path");
 const { PrismaClient } = require("@prisma/client");
 const { PrismaMariaDb } = require("@prisma/adapter-mariadb");
 
 const dbUrl = new URL(process.env.DATABASE_URL);
+
+const caCert = fs.readFileSync(path.join(__dirname, "ca.pem")).toString();
 
 const adapter = new PrismaMariaDb({
   host: dbUrl.hostname,
@@ -9,10 +13,8 @@ const adapter = new PrismaMariaDb({
   user: dbUrl.username,
   password: dbUrl.password,
   database: dbUrl.pathname.replace("/", ""),
-  allowPublicKeyRetrieval: true,
   ssl: {
-    rejectUnauthorized: false,
-    minVersion: "TLSv1.2",
+    ca: caCert,
   },
 });
 
