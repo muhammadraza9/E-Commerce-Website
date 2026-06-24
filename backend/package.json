@@ -4,10 +4,11 @@
   "main": "index.js",
   "type": "commonjs",
   "scripts": {
-    "build": "prisma generate",
-    "start": "node src/server.js",
-    "dev": "nodemon src/server.js"
-  },
+  "build": "prisma generate",
+  "postinstall": "prisma generate",
+  "start": "node src/server.js",
+  "dev": "nodemon src/server.js"
+},
   "dependencies": {
     "@prisma/adapter-mariadb": "^7.8.0",
     "@prisma/client": "^7.8.0",

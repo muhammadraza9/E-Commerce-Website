@@ -4,9 +4,9 @@ import { useState } from "react";
 import emailjs from "@emailjs/browser";
 import { showSuccessToast, showErrorToast } from "@/utils/toast";
 
-const EMAILJS_SERVICE_ID = "service_hpj9zp6";
-const EMAILJS_TEMPLATE_ID = "template_l5fle1u";
-const EMAILJS_PUBLIC_KEY = "asYlPIOWs0_29Dtbs";
+const EMAILJS_SERVICE_ID = "service_si7x6yg";
+const EMAILJS_TEMPLATE_ID = "template_piobd0l";
+const EMAILJS_PUBLIC_KEY = "I3kmaWk4nlrKIj1RS";
 
 export default function Contact() {
   const [formData, setFormData] = useState({
