@@ -1,27 +1,37 @@
-const fs = require("fs");
-const path = require("path");
 const { PrismaClient } = require("@prisma/client");
 const { PrismaMariaDb } = require("@prisma/adapter-mariadb");
 
-const dbUrl = new URL(process.env.DATABASE_URL);
+if (!process.env.DATABASE_URL) {
+  throw new Error("DATABASE_URL is not defined");
+}
 
-const caCert = fs.readFileSync(path.join(__dirname, "ca.pem")).toString();
+const dbUrl = new URL(process.env.DATABASE_URL);
 
 const adapter = new PrismaMariaDb({
   host: dbUrl.hostname,
   port: Number(dbUrl.port) || 3306,
-  user: dbUrl.username,
-  password: dbUrl.password,
+  user: decodeURIComponent(dbUrl.username),
+  password: decodeURIComponent(dbUrl.password),
   database: dbUrl.pathname.replace("/", ""),
-  ssl: {
-    ca: caCert,
-  },
-  connectTimeout: 20000,
-  connectionLimit: 5,
+
+  // Aiven SSL
+  ssl: true,
+
+  // Serverless friendly settings
+  connectTimeout: 60000,
+  connectionLimit: 1,
 });
 
-const prisma = new PrismaClient({
-  adapter,
-});
+const globalForPrisma = global;
+
+const prisma =
+  globalForPrisma.prisma ||
+  new PrismaClient({
+    adapter,
+  });
+
+if (process.env.NODE_ENV !== "production") {
+  globalForPrisma.prisma = prisma;
+}
 
 module.exports = prisma;
