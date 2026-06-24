@@ -21,10 +21,10 @@ model order {
   paymentStatus String      @default("PENDING")
   txnRefNo      String?
   userId        Int?
-
   user          user?       @relation(fields: [userId], references: [id])
-
   items         orderitem[]
+
+  @@index([userId], map: "order_userId_fkey")
 }
 
 model orderitem {
@@ -58,6 +58,5 @@ model user {
   password  String
   role      String   @default("USER")
   createdAt DateTime @default(now())
-
   orders    order[]
 }
