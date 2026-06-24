@@ -12,6 +12,7 @@ const adapter = new PrismaMariaDb({
   allowPublicKeyRetrieval: true,
   ssl: {
     rejectUnauthorized: false,
+    minVersion: "TLSv1.2",
   },
 });
 
