@@ -27,3 +27,9 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 module.exports = app;
+
+
+
+
+
+// DATABASE_URL="mysql://root:Raza1234@localhost:3306/ecommerce_db"
