@@ -7,6 +7,7 @@ import ProductCard from "@/components/ProductCard";
 
 export default function Home() {
   const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchProducts();
@@ -16,20 +17,28 @@ export default function Home() {
     try {
       const res = await api.get("/products");
 
-      // Show only first 8 products on home page
-      setProducts(res.data.slice(0, 8));
+      console.log("API Response:", res.data);
+
+      if (Array.isArray(res.data)) {
+        setProducts(res.data.slice(0, 8));
+      } else {
+        console.error("Products is not an array:", res.data);
+        setProducts([]);
+      }
     } catch (error) {
-      console.log(error);
+      console.error("Fetch Products Error:", error);
+      setProducts([]);
+    } finally {
+      setLoading(false);
     }
   };
+  console.log("products =", products);
+console.log("isArray =", Array.isArray(products));
+console.log("API URL:", process.env.NEXT_PUBLIC_API_URL);
 
   return (
     <main className="min-h-screen">
-
-      {/* Hero Section */}
       <section className="relative px-6 py-32 flex items-center overflow-hidden min-h-[420px]">
-        {/* Background image layer — brightness filter applied here only,
-            so it doesn't wash out the text on top */}
         <div
           className="absolute inset-0"
           style={{
@@ -41,21 +50,22 @@ export default function Home() {
           }}
         />
 
-        {/* Lighter overlay so text stays readable while the image looks brighter */}
         <div className="absolute inset-0 bg-black/25" />
 
         <div className="relative max-w-7xl mx-auto w-full">
-          <h1 className="text-5xl font-bold text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)]">
+          <h1 className="text-5xl font-bold text-white">
             Welcome To <span className="text-[#D4AF37]">Style Avenue !</span>
           </h1>
 
-          <p className="mt-4 text-lg text-white font-medium drop-shadow-[0_1px_4px_rgba(0,0,0,0.8)]">
-            <span className="text-[#D4AF37]">Explore our latest collection </span> of fashion products.
+          <p className="mt-4 text-lg text-white">
+            <span className="text-[#D4AF37]">
+              Explore our latest collection
+            </span>{" "}
+            of fashion products.
           </p>
         </div>
       </section>
 
-      {/* Featured Products */}
       <section className="max-w-7xl mx-auto px-6 pt-6">
         <div className="flex items-center justify-between mb-10">
           <h2 className="text-4xl font-bold text-white">
@@ -70,12 +80,17 @@ export default function Home() {
           </Link>
         </div>
 
-        {products.length === 0 ? (
+        {loading ? (
+          <div className="text-center text-gray-400 py-10">
+            Loading Products...
+          </div>
+        ) : products.length === 0 ? (
           <div className="text-center text-gray-400 py-10">
             No Products Found
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
+            
             {products.map((product) => (
               <ProductCard
                 key={product.id}
@@ -93,9 +108,7 @@ export default function Home() {
         </Link>
       </section>
 
-      {/* Space Between Products And Footer */}
       <div className="h-32"></div>
-
     </main>
   );
 }
