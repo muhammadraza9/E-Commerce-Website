@@ -6,6 +6,7 @@ import ProductCard from "@/components/ProductCard";
 
 export default function ProductsPage() {
   const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchProducts();
@@ -14,9 +15,17 @@ export default function ProductsPage() {
   const fetchProducts = async () => {
     try {
       const res = await api.get("/products");
-      setProducts(res.data);
+
+      if (Array.isArray(res.data)) {
+        setProducts(res.data);
+      } else {
+        setProducts([]);
+      }
     } catch (error) {
-      console.log(error);
+      console.error("Fetch Products Error:", error);
+      setProducts([]);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -26,13 +35,23 @@ export default function ProductsPage() {
         Prod<span className="text-[#D4AF37]">ucts</span>
       </h1>
 
-      <div className="grid md:grid-cols-3 gap-6 mb-24">
-        {products.map((product) => (
-          <div key={product.id} className="h-full">
-            <ProductCard product={product} />
-          </div>
-        ))}
-      </div>
+      {loading ? (
+        <div className="text-center text-gray-400 py-16 text-lg">
+          Loading Products...
+        </div>
+      ) : products.length === 0 ? (
+        <div className="text-center text-gray-400 py-16 text-lg">
+          No Products Found
+        </div>
+      ) : (
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-24">
+          {products.map((product) => (
+            <div key={product.id} className="h-full">
+              <ProductCard product={product} />
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

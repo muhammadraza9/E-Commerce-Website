@@ -17,8 +17,6 @@ export default function Home() {
     try {
       const res = await api.get("/products");
 
-      console.log("API Response:", res.data);
-
       if (Array.isArray(res.data)) {
         setProducts(res.data.slice(0, 8));
       } else {
@@ -32,9 +30,6 @@ export default function Home() {
       setLoading(false);
     }
   };
-  console.log("products =", products);
-console.log("isArray =", Array.isArray(products));
-console.log("API URL:", process.env.NEXT_PUBLIC_API_URL);
 
   return (
     <main className="min-h-screen">
