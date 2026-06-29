@@ -9,7 +9,7 @@ export default function AdminLayout({ children }) {
       {/* Sidebar */}
       <div className="w-64 bg-slate-900 border-r border-slate-800 p-6">
         <h1 className="text-2xl font-bold text-white mb-8">
-          Admin Panel
+          Admin <span className="text-[#D4AF37]"> Panel </span>
         </h1>
 
         <div className="flex flex-col gap-3">
@@ -43,7 +43,7 @@ export default function AdminLayout({ children }) {
 
           <Link
             href="/"
-            className="text-white bg-red-600 px-4 py-3 rounded-lg hover:bg-red-700 transition-colors mt-4"
+            className="inline-block mt-8 bg-[#D4AF25] text-white text-center px-6 py-3 rounded-md font-semibold hover:scale-105 transition"
           >
             Back To Store
           </Link>

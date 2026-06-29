@@ -99,7 +99,7 @@ export default function Footer() {
             </h3>
 
             <div className="space-y-4 text-gray-400 text-sm">
-              <p>📧 support@styleavenue.com</p>
+              <p>📧  raza@styleavenue.com</p>
               <p>📞 +92 312 6779452</p>
               <p>📍 Islamabad, Pakistan</p>
             </div>

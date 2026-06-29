@@ -52,7 +52,7 @@ export default function AdminUsersPage() {
     <div className="max-w-5xl mx-auto">
 
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white">Manage Users</h1>
+        <h1 className="text-3xl font-bold text-white">Manage <span className="text-[#D4AF37]"> Users </span> </h1>
         <p className="text-gray-400 text-sm mt-1">
           {users.length} user{users.length !== 1 ? "s" : ""} registered
         </p>

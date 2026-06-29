@@ -69,7 +69,7 @@ console.log("API URL:", process.env.NEXT_PUBLIC_API_URL);
       <section className="max-w-7xl mx-auto px-6 pt-6">
         <div className="flex items-center justify-between mb-10">
           <h2 className="text-4xl font-bold text-white">
-            Featured Products
+            Featured <span className="text-[#D4AF37]">Products </span>
           </h2>
 
           <Link

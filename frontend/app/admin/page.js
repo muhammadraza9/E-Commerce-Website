@@ -29,7 +29,7 @@ export default function AdminPage() {
   return (
     <div className="px-6 py-8">
       <h1 className="text-4xl font-bold text-white">
-        Dashboard
+        Dash<span className="text-[#D4AF37]">board </span>
       </h1>
 
       <p className="text-gray-400 mt-2 mb-8">

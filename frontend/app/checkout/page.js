@@ -15,6 +15,7 @@ export default function CheckoutPage() {
 
   const [loading, setLoading] = useState(false);
   const [orderPlaced, setOrderPlaced] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -24,16 +25,25 @@ export default function CheckoutPage() {
     paymentMethod: "",
   });
 
+  // ── Require login before allowing checkout ──
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
-    if (storedUser) {
-      const userData = JSON.parse(storedUser);
-      setFormData((prev) => ({
-        ...prev,
-        name: userData.username || userData.name || prev.name,
-        email: userData.email || prev.email,
-      }));
+    const token = localStorage.getItem("token");
+
+    if (!storedUser || !token) {
+      showErrorToast("Please sign in to place an order");
+      router.push("/signin");
+      return;
     }
+
+    const userData = JSON.parse(storedUser);
+    setFormData((prev) => ({
+      ...prev,
+      name: userData.username || userData.name || prev.name,
+      email: userData.email || prev.email,
+    }));
+
+    setCheckingAuth(false);
   }, []);
 
   const handleChange = (e) => {
@@ -42,6 +52,16 @@ export default function CheckoutPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Double-check login right before placing the order too
+    const storedUser = localStorage.getItem("user");
+    const token = localStorage.getItem("token");
+
+    if (!storedUser || !token) {
+      showErrorToast("Please sign in to place an order");
+      router.push("/signin");
+      return;
+    }
 
     if (itemsToCheckout.length === 0) {
       showErrorToast("Your cart is empty");
@@ -91,7 +111,14 @@ export default function CheckoutPage() {
 
     } catch (error) {
       console.log(error);
-      showErrorToast("Order failed");
+
+      // If token expired/invalid, backend will send 401 -> send user to signin
+      if (error?.response?.status === 401) {
+        showErrorToast("Please sign in to place an order");
+        router.push("/signin");
+      } else {
+        showErrorToast("Order failed");
+      }
     } finally {
       setLoading(false);
     }
@@ -109,6 +136,11 @@ export default function CheckoutPage() {
     formData.phone.trim() !== "" &&
     formData.address.trim() !== "" &&
     formData.paymentMethod !== "";
+
+  // Don't flash the checkout form before the auth check resolves
+  if (checkingAuth) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen relative">
