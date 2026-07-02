@@ -6,7 +6,6 @@ const sendEmail = require("../utils/sendEmail");
 exports.createOrder = async (req, res) => {
   try {
     const {
-      userId,
       customer,
       email,
       phone,
@@ -15,6 +14,9 @@ exports.createOrder = async (req, res) => {
       paymentMethod,
       items,
     } = req.body;
+
+    // userId comes from the verified token, not from the request body
+    const userId = req.user?.id;
 
     const trackingId =
       "TRK-" +
@@ -48,12 +50,7 @@ exports.createOrder = async (req, res) => {
       },
     });
 
-    res.status(201).json({
-      success: true,
-      trackingId,
-      order,
-    });
-
+    // Send email to customer (BEFORE sending response)
     try {
       await sendEmail({
         to: email,
@@ -76,11 +73,48 @@ exports.createOrder = async (req, res) => {
           </div>
         `,
       });
+      console.log("✅ Customer email sent for order:", trackingId);
     } catch (err) {
-      console.log(err);
+      console.error("❌ Customer Email Error:", err.message);
     }
+
+    // Send email to admin (BEFORE sending response)
+    try {
+      await sendEmail({
+        to: process.env.ADMIN_EMAIL,
+        subject: "New Order Received",
+        html: `
+          <div>
+            <h2>New Order Received 🛒</h2>
+
+            <p><strong>Customer:</strong> ${customer}</p>
+            <p><strong>Email:</strong> ${email}</p>
+            <p><strong>Phone:</strong> ${phone}</p>
+            <p><strong>Address:</strong> ${address}</p>
+
+            <p><strong>Tracking ID:</strong> ${trackingId}</p>
+
+            <p><strong>Payment Method:</strong> ${
+              paymentMethod || "COD"
+            }</p>
+
+            <p><strong>Total:</strong> Rs ${total}</p>
+          </div>
+        `,
+      });
+      console.log("✅ Admin email sent for order:", trackingId);
+    } catch (err) {
+      console.error("❌ Admin Email Error:", err.message);
+    }
+
+    // Send response AFTER emails are done
+    res.status(201).json({
+      success: true,
+      trackingId,
+      order,
+    });
   } catch (err) {
-    console.log(err);
+    console.error("❌ Create Order Error:", err.message);
 
     res.status(500).json({
       error: err.message,
@@ -164,11 +198,7 @@ exports.updateOrderStatus = async (req, res) => {
       },
     });
 
-    res.json({
-      success: true,
-      order,
-    });
-
+    // Send email BEFORE response here too, for consistency
     try {
       await sendEmail({
         to: order.email,
@@ -195,11 +225,16 @@ exports.updateOrderStatus = async (req, res) => {
         `,
       });
     } catch (emailErr) {
-      console.log("Status updated but email failed:", emailErr);
+      console.error("❌ Status Update Email Error:", emailErr.message);
     }
 
+    res.json({
+      success: true,
+      order,
+    });
+
   } catch (err) {
-    console.log(err);
+    console.error("❌ Update Order Status Error:", err.message);
 
     res.status(500).json({
       error: err.message,
@@ -253,8 +288,7 @@ exports.getStats = async (req, res) => {
     });
 
   } catch (err) {
-    console.log("STATS ERROR:");
-    console.log(err);
+    console.error("❌ Stats Error:", err.message);
 
     res.status(500).json({
       error: err.message,
@@ -288,7 +322,7 @@ exports.getMyOrders = async (req, res) => {
 
     res.status(200).json(orders);
   } catch (err) {
-    console.log(err);
+    console.error("❌ Get My Orders Error:", err.message);
 
     res.status(500).json({
       success: false,
@@ -320,7 +354,7 @@ exports.getOrderById = async (req, res) => {
 
     res.json(order);
   } catch (err) {
-    console.log(err);
+    console.error("❌ Get Order By Id Error:", err.message);
 
     res.status(500).json({
       error: err.message,
@@ -368,6 +402,8 @@ exports.cancelOrder = async (req, res) => {
       order: updatedOrder,
     });
   } catch (err) {
+    console.error("❌ Cancel Order Error:", err.message);
+
     res.status(500).json({
       error: err.message,
     });

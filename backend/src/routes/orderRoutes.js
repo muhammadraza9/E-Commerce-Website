@@ -12,6 +12,8 @@ const {
   cancelOrder,
 } = require("../controllers/orderController");
 
+const { verifyToken } = require("../middleware/authMiddleware");
+
 // Dashboard Stats
 router.get("/stats/dashboard", getStats);
 
@@ -21,8 +23,8 @@ router.get("/user/:email", getMyOrders);
 // Order Detail By ID
 router.get("/id/:id", getOrderById);
 
-// Create Order
-router.post("/", createOrder);
+// Create Order (must be logged in)
+router.post("/", verifyToken, createOrder);
 
 // Get All Orders
 router.get("/", getAllOrders);

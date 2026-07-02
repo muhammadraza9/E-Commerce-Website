@@ -1,174 +1,225 @@
 const prisma = require("../config/db");
 
-// Get All Products
+// ===============================
+// Get All Products + Search + Filter + Sort + Pagination
+// ===============================
 
 const getProducts = async (req, res) => {
-try {
-const products =
-await prisma.product.findMany();
+  try {
+    const {
+      search = "",
+      category = "",
+      sort = "newest",
+      page = 1,
+      limit = 12,
+    } = req.query;
 
+    const where = {};
 
-res.status(200).json(products);
+    if (search) {
+      where.OR = [
+        {
+          name: {
+            contains: search,
+          },
+        },
+        {
+          description: {
+            contains: search,
+          },
+        },
+      ];
+    }
 
+    if (category && category !== "All") {
+      where.category = category;
+    }
 
-} catch (err) {
-console.log(err);
+    // ===============================
+    // Sorting Logic
+    // ===============================
 
+    let orderBy = { createdAt: "desc" }; // default: newest
 
-res.status(500).json({
-  message: "Server Error",
-});
+    if (sort === "price_asc") {
+      orderBy = { price: "asc" };
+    } else if (sort === "price_desc") {
+      orderBy = { price: "desc" };
+    } else if (sort === "oldest") {
+      orderBy = { createdAt: "asc" };
+    } else if (sort === "newest") {
+      orderBy = { createdAt: "desc" };
+    }
 
+    // ===============================
+    // Pagination Logic
+    // ===============================
 
-}
+    const pageNumber = Math.max(Number(page) || 1, 1);
+    const limitNumber = Math.max(Number(limit) || 12, 1);
+    const skip = (pageNumber - 1) * limitNumber;
+
+    const [products, totalProducts] = await Promise.all([
+      prisma.product.findMany({
+        where,
+        orderBy,
+        skip,
+        take: limitNumber,
+      }),
+      prisma.product.count({ where }),
+    ]);
+
+    const totalPages = Math.ceil(totalProducts / limitNumber);
+
+    res.status(200).json({
+      products,
+      currentPage: pageNumber,
+      totalPages,
+      totalProducts,
+    });
+  } catch (err) {
+    console.log(err);
+
+    res.status(500).json({
+      message: "Server Error",
+    });
+  }
 };
 
+// ===============================
 // Get Single Product
+// ===============================
 
-const getProduct = async (
-req,
-res
-) => {
-try {
-const product =
-await prisma.product.findUnique({
-where: {
-id: Number(req.params.id),
-},
-});
+const getProduct = async (req, res) => {
+  try {
+    const id = Number(req.params.id);
 
+    const product = await prisma.product.findUnique({
+      where: {
+        id,
+      },
+    });
 
-if (!product) {
-  return res.status(404).json({
-    message:
-      "Product not found",
-  });
-}
+    if (!product) {
+      return res.status(404).json({
+        message: "Product not found",
+      });
+    }
 
-res.json(product);
+    res.status(200).json(product);
+  } catch (err) {
+    console.error("GET PRODUCT ERROR:", err);
 
-
-} catch (err) {
-res.status(500).json({
-error: err.message,
-});
-}
+    res.status(500).json({
+      message: "Server Error",
+    });
+  }
 };
 
-// Add Product
+// ===============================
+// Create Product
+// ===============================
 
-const createProduct = async (
-req,
-res
-) => {
-try {
-const {
-name,
-description,
-image,
-price,
-} = req.body;
-
-
-const product =
-  await prisma.product.create({
-    data: {
+const createProduct = async (req, res) => {
+  try {
+    const {
       name,
       description,
       image,
-      price: Number(price),
-    },
-  });
+      price,
+      category,
+    } = req.body;
 
-res.status(201).json(product);
+    const product = await prisma.product.create({
+      data: {
+        name,
+        description,
+        image,
+        price: Number(price),
+        category: category || "Clothing",
+      },
+    });
 
+    res.status(201).json(product);
+  } catch (err) {
+    console.error("CREATE PRODUCT ERROR:", err);
 
-} catch (err) {
-console.log(
-"CREATE PRODUCT ERROR:"
-);
-
-
-console.log(err);
-
-res.status(500).json({
-  error: err.message,
-});
-
-}
+    res.status(500).json({
+      message: "Server Error",
+    });
+  }
 };
 
-
+// ===============================
 // Update Product
+// ===============================
 
-const updateProduct = async (
-req,
-res
-) => {
-try {
-const {
-name,
-description,
-image,
-price,
-} = req.body;
+const updateProduct = async (req, res) => {
+  try {
+    const id = Number(req.params.id);
 
-
-const product =
-  await prisma.product.update({
-    where: {
-      id: Number(req.params.id),
-    },
-
-    data: {
+    const {
       name,
       description,
       image,
-      price: Number(price),
-    },
-  });
+      price,
+      category,
+    } = req.body;
 
-res.json(product);
+    const product = await prisma.product.update({
+      where: {
+        id,
+      },
+      data: {
+        name,
+        description,
+        image,
+        price: Number(price),
+        category,
+      },
+    });
 
+    res.status(200).json(product);
+  } catch (err) {
+    console.error("UPDATE PRODUCT ERROR:", err);
 
-} catch (err) {
-res.status(500).json({
-error: err.message,
-});
-}
+    res.status(500).json({
+      message: "Server Error",
+    });
+  }
 };
 
+// ===============================
 // Delete Product
+// ===============================
 
-const deleteProduct = async (
-req,
-res
-) => {
-try {
-await prisma.product.delete({
-where: {
-id: Number(req.params.id),
-},
-});
+const deleteProduct = async (req, res) => {
+  try {
+    const id = Number(req.params.id);
 
+    await prisma.product.delete({
+      where: {
+        id,
+      },
+    });
 
-res.json({
-  success: true,
-  message:
-    "Product deleted",
-});
+    res.status(200).json({
+      success: true,
+      message: "Product deleted successfully",
+    });
+  } catch (err) {
+    console.error("DELETE PRODUCT ERROR:", err);
 
-} catch (err) {
-res.status(500).json({
-error: err.message,
-});
-}
+    res.status(500).json({
+      message: "Server Error",
+    });
+  }
 };
 
 module.exports = {
-getProducts,
-getProduct,
-createProduct,
-updateProduct,
-deleteProduct,
+  getProducts,
+  getProduct,
+  createProduct,
+  updateProduct,
+  deleteProduct,
 };
