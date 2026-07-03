@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import api from "@/services/api";
 import ProductCard from "@/components/ProductCard";
 
@@ -16,38 +16,77 @@ export default function ProductsPage() {
   const [totalPages, setTotalPages] = useState(1);
   const limit = 12;
 
+  // Tracks the most recent request so late-arriving (stale) responses
+  // from older keystrokes never overwrite newer results.
+  const latestRequestId = useRef(0);
+
   useEffect(() => {
     // Jab bhi search/category/sort change ho, page 1 pe reset karo
     setCurrentPage(1);
   }, [search, category, sort]);
 
   useEffect(() => {
-    fetchProducts();
+    // Debounce: search type karte waqt har letter pe fetch na ho,
+    // 400ms rukne ke baad hi request jaye.
+    const timer = setTimeout(() => {
+      fetchProducts();
+    }, 400);
+
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, category, sort, currentPage]);
 
   const fetchProducts = async () => {
+    const requestId = ++latestRequestId.current;
+
     try {
       setLoading(true);
 
-      const res = await api.get(
-        `/products?search=${search}&category=${category}&sort=${sort}&page=${currentPage}&limit=${limit}`
-      );
+      const params = new URLSearchParams({
+        search,
+        sort,
+        page: currentPage,
+        limit,
+      });
+
+      if (category && category !== "All") {
+        params.append("category", category);
+      }
+
+      const res = await api.get(`/products?${params.toString()}`);
+
+      // Agar is response ke aane tak koi naya (baad wala) request
+      // ja chuka hai, to ye purana/stale response hai — ignore karo.
+      if (requestId !== latestRequestId.current) {
+        return;
+      }
 
       const data = res.data;
 
-      if (data && Array.isArray(data.products)) {
+      if (Array.isArray(data)) {
+        setProducts(data);
+        setTotalPages(1);
+      } else if (data && Array.isArray(data.products)) {
         setProducts(data.products);
         setTotalPages(data.totalPages || 1);
       } else {
+        console.error("Unexpected products response shape:", data);
         setProducts([]);
         setTotalPages(1);
       }
     } catch (error) {
-      console.log(error);
+      if (requestId !== latestRequestId.current) {
+        return;
+      }
+      console.log("CATCH ERROR:", error.message);
+      console.log("Error response data:", JSON.stringify(error.response?.data));
+      console.log("Error status:", error.response?.status);
       setProducts([]);
       setTotalPages(1);
     } finally {
-      setLoading(false);
+      if (requestId === latestRequestId.current) {
+        setLoading(false);
+      }
     }
   };
 
@@ -79,15 +118,12 @@ export default function ProductsPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-6 pt-12">
-
       <div className="flex flex-col lg:flex-row justify-between gap-4 mb-8">
-
         <h1 className="text-4xl font-bold text-white">
           Prod<span className="text-[#D4AF37]">ucts</span>
         </h1>
 
         <div className="flex flex-col sm:flex-row gap-3">
-
           <input
             type="text"
             placeholder="Search Product..."
@@ -118,9 +154,7 @@ export default function ProductsPage() {
             <option value="price_asc">Price: Low to High</option>
             <option value="price_desc">Price: High to Low</option>
           </select>
-
         </div>
-
       </div>
 
       {loading ? (
