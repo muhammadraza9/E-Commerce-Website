@@ -5,12 +5,6 @@ const prisma = require("../config/db");
 // ===============================
 
 const getProducts = async (req, res) => {
-
-    return res.json({
-    message: "NEW DEPLOY WORKING",
-    query: req.query,
-  });
-
   try {
     const {
       search = "",
@@ -20,87 +14,89 @@ const getProducts = async (req, res) => {
       limit = 12,
     } = req.query;
 
+    const pageNumber = Math.max(parseInt(page) || 1, 1);
+    const limitNumber = Math.max(parseInt(limit) || 12, 1);
+    const skip = (pageNumber - 1) * limitNumber;
+
     const where = {};
 
-    if (search) {
+    // ===============================
+    // Search
+    // ===============================
+
+    if (search.trim()) {
       where.OR = [
         {
           name: {
-            contains: search,
+            contains: search.trim(),
           },
         },
         {
           description: {
-            contains: search,
+            contains: search.trim(),
           },
         },
       ];
     }
+
+    // ===============================
+    // Category
+    // ===============================
 
     if (category && category !== "All") {
       where.category = category;
     }
 
     // ===============================
-    // DEBUG LOGS
+    // Sort
     // ===============================
 
-    console.log("=================================");
-    console.log("REQ QUERY:", req.query);
-    console.log("SEARCH:", search);
-    console.log("CATEGORY:", category);
-    console.log("SORT:", sort);
-    console.log("PAGE:", page);
-    console.log("LIMIT:", limit);
-    console.log("WHERE:", JSON.stringify(where, null, 2));
-    console.log("=================================");
+    let orderBy = {
+      createdAt: "desc",
+    };
 
-    // ===============================
-    // Sorting Logic
-    // ===============================
+    switch (sort) {
+      case "oldest":
+        orderBy = { createdAt: "asc" };
+        break;
 
-    let orderBy = { createdAt: "desc" };
+      case "price_asc":
+        orderBy = { price: "asc" };
+        break;
 
-    if (sort === "price_asc") {
-      orderBy = { price: "asc" };
-    } else if (sort === "price_desc") {
-      orderBy = { price: "desc" };
-    } else if (sort === "oldest") {
-      orderBy = { createdAt: "asc" };
-    } else if (sort === "newest") {
-      orderBy = { createdAt: "desc" };
+      case "price_desc":
+        orderBy = { price: "desc" };
+        break;
+
+      default:
+        orderBy = { createdAt: "desc" };
     }
 
-    // ===============================
-    // Pagination Logic
-    // ===============================
+    console.log("SEARCH:", search);
+    console.log("WHERE:", JSON.stringify(where, null, 2));
 
-    const pageNumber = Math.max(Number(page) || 1, 1);
-    const limitNumber = Math.max(Number(limit) || 12, 1);
-    const skip = (pageNumber - 1) * limitNumber;
+    const products = await prisma.product.findMany({
+      where,
+      orderBy,
+      skip,
+      take: limitNumber,
+    });
 
-    const [products, totalProducts] = await Promise.all([
-      prisma.product.findMany({
-        where,
-        orderBy,
-        skip,
-        take: limitNumber,
-      }),
-      prisma.product.count({ where }),
-    ]);
+    const totalProducts = await prisma.product.count({
+      where,
+    });
 
     console.log("FOUND PRODUCTS:", products.length);
-
-    const totalPages = Math.ceil(totalProducts / limitNumber);
 
     res.status(200).json({
       products,
       currentPage: pageNumber,
-      totalPages,
+      totalPages: Math.ceil(totalProducts / limitNumber),
       totalProducts,
     });
+
   } catch (err) {
-    console.error("GET PRODUCTS ERROR:", err);
+    console.error(err);
 
     res.status(500).json({
       message: "Server Error",
