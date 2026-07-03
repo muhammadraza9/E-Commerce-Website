@@ -1,21 +1,9 @@
 {
   "version": 2,
-  "regions": ["bom1"],
-  "functions": {
-    "src/server.js": {
-      "runtime": "@vercel/node@22.x"
-    }
-  },
-  "builds": [
+  "rewrites": [
     {
-      "src": "src/server.js",
-      "use": "@vercel/node"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "src/server.js"
+      "source": "/(.*)",
+      "destination": "/src/server.js"
     }
   ]
 }
