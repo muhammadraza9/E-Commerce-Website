@@ -3,7 +3,10 @@
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import api from "@/services/api";
-import { showSuccessToast, showErrorToast } from "@/utils/toast";
+import {
+  showSuccessToast,
+  showErrorToast,
+} from "@/utils/toast";
 
 export default function AddProductPage() {
   const router = useRouter();
@@ -15,69 +18,88 @@ export default function AddProductPage() {
     image: "",
     category: "Clothing",
     price: "",
+    featured: false,
   });
 
-  const [imageMode, setImageMode] = useState("url"); // "url" | "file"
+  const [imageMode, setImageMode] = useState("url");
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value, type, checked } = e.target;
+
+    setFormData((prev) => ({
+      ...prev,
+      [name]: type === "checkbox" ? checked : value,
+    }));
   };
 
   const handleImageModeSwitch = (mode) => {
     setImageMode(mode);
     setImageFile(null);
     setImagePreview("");
-    setFormData((prev) => ({ ...prev, image: "" }));
+    setFormData((prev) => ({
+      ...prev,
+      image: "",
+    }));
   };
 
   const handleUrlChange = (e) => {
     const url = e.target.value;
-    setFormData((prev) => ({ ...prev, image: url }));
+
+    setFormData((prev) => ({
+      ...prev,
+      image: url,
+    }));
+
     setImagePreview(url);
   };
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
+
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
-      showErrorToast("Please select an image file");
+      showErrorToast("Please select an image.");
       return;
     }
 
     if (file.size > 5 * 1024 * 1024) {
-      showErrorToast("Image must be smaller than 5MB");
+      showErrorToast("Image must be less than 5MB.");
       return;
     }
 
     setImageFile(file);
-    const objectUrl = URL.createObjectURL(file);
-    setImagePreview(objectUrl);
+    setImagePreview(URL.createObjectURL(file));
   };
 
   const handleDrop = (e) => {
     e.preventDefault();
+
     const file = e.dataTransfer.files[0];
+
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
-      showErrorToast("Please drop an image file");
+      showErrorToast("Invalid image.");
       return;
     }
 
     setImageFile(file);
-    const objectUrl = URL.createObjectURL(file);
-    setImagePreview(objectUrl);
+    setImagePreview(URL.createObjectURL(file));
   };
 
-  const handleDragOver = (e) => e.preventDefault();
+  const handleDragOver = (e) => {
+    e.preventDefault();
+  };
 
   const uploadToCloudinary = async (file) => {
     const data = new FormData();
+
     data.append("file", file);
+
     data.append(
       "upload_preset",
       process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET
@@ -91,11 +113,8 @@ export default function AddProductPage() {
       }
     );
 
-    if (!cloudRes.ok) {
-      throw new Error("Cloudinary upload failed");
-    }
-
     const cloudData = await cloudRes.json();
+
     return cloudData.secure_url;
   };
 
@@ -103,36 +122,34 @@ export default function AddProductPage() {
     e.preventDefault();
 
     if (imageMode === "url" && !formData.image) {
-      showErrorToast("Please enter an image URL");
-      return;
+      return showErrorToast("Please enter image URL.");
     }
+
     if (imageMode === "file" && !imageFile) {
-      showErrorToast("Please select an image file");
-      return;
+      return showErrorToast("Please upload image.");
     }
 
     try {
       setLoading(true);
 
-      let imageValue = formData.image;
+      let image = formData.image;
 
-      if (imageMode === "file" && imageFile) {
-        imageValue = await uploadToCloudinary(imageFile);
+      if (imageMode === "file") {
+        image = await uploadToCloudinary(imageFile);
       }
 
       await api.post("/products", {
-        name: formData.name,
-        description: formData.description,
-        image: imageValue,
-        category: formData.category,
+        ...formData,
+        image,
         price: Number(formData.price),
       });
 
       showSuccessToast("Product Added Successfully");
+
       router.push("/admin/products");
     } catch (error) {
       console.log(error);
-      showErrorToast("Failed to add product");
+      showErrorToast("Failed to add product.");
     } finally {
       setLoading(false);
     }
@@ -140,179 +157,208 @@ export default function AddProductPage() {
 
   return (
     <div className="max-w-3xl mx-auto px-6 py-12">
-      <h1 className="text-4xl font-bold text-white mb-8">Add New Product</h1>
+
+      <h1 className="text-4xl font-bold text-white mb-8">
+        Add New Product
+      </h1>
 
       <form
         onSubmit={handleSubmit}
         className="bg-slate-900 border border-slate-700 rounded-2xl p-6 space-y-5"
       >
-        {/* Product Name */}
+
+        {/* Name */}
+
         <div>
-          <label className="block text-white mb-2">Product Name</label>
+
+          <label className="block text-white mb-2">
+            Product Name
+          </label>
+
           <input
             type="text"
             name="name"
             value={formData.name}
             onChange={handleChange}
-            placeholder="Black T-Shirt"
             className="w-full bg-slate-800 border border-slate-600 text-white p-3 rounded-lg"
             required
           />
+
         </div>
 
         {/* Description */}
+
         <div>
-          <label className="block text-white mb-2">Description</label>
+
+          <label className="block text-white mb-2">
+            Description
+          </label>
+
           <textarea
+            rows={4}
             name="description"
             value={formData.description}
             onChange={handleChange}
-            rows="4"
-            placeholder="Premium Cotton T-Shirt"
             className="w-full bg-slate-800 border border-slate-600 text-white p-3 rounded-lg"
             required
           />
+
         </div>
 
-        {/* Image Section */}
+        {/* Image */}
+
         <div>
-          <label className="block text-white mb-2">Product Image</label>
+
+          <label className="block text-white mb-2">
+            Product Image
+          </label>
 
           <div className="flex gap-2 mb-4">
+
             <button
               type="button"
               onClick={() => handleImageModeSwitch("url")}
-              className={`flex-1 py-2 rounded-lg font-medium transition text-sm ${
+              className={`flex-1 py-2 rounded-lg ${
                 imageMode === "url"
                   ? "bg-green-600 text-white"
-                  : "bg-slate-700 text-slate-300 hover:bg-slate-600"
+                  : "bg-slate-700 text-gray-300"
               }`}
             >
-              🔗 Add via URL
+              URL
             </button>
+
             <button
               type="button"
               onClick={() => handleImageModeSwitch("file")}
-              className={`flex-1 py-2 rounded-lg font-medium transition text-sm ${
+              className={`flex-1 py-2 rounded-lg ${
                 imageMode === "file"
                   ? "bg-green-600 text-white"
-                  : "bg-slate-700 text-slate-300 hover:bg-slate-600"
+                  : "bg-slate-700 text-gray-300"
               }`}
             >
-              📁 Upload File
+              Upload
             </button>
+
           </div>
 
-          {imageMode === "url" && (
+          {imageMode === "url" ? (
+
             <input
               type="text"
-              name="image"
               value={formData.image}
               onChange={handleUrlChange}
-              placeholder="https://example.com/image.jpg"
               className="w-full bg-slate-800 border border-slate-600 text-white p-3 rounded-lg"
             />
-          )}
 
-          {imageMode === "file" && (
+          ) : (
+
             <div
-              onClick={() => fileInputRef.current?.click()}
               onDrop={handleDrop}
               onDragOver={handleDragOver}
-              className="w-full border-2 border-dashed border-slate-600 rounded-lg p-8 text-center cursor-pointer hover:border-green-500 hover:bg-slate-800/50 transition"
+              onClick={() => fileInputRef.current.click()}
+              className="border-2 border-dashed border-slate-600 rounded-xl p-8 text-center cursor-pointer"
             >
+
               <input
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
+                hidden
                 onChange={handleFileChange}
-                className="hidden"
               />
-              {imageFile ? (
-                <div className="text-slate-300">
-                  <p className="text-green-400 font-medium">✓ {imageFile.name}</p>
-                  <p className="text-xs text-slate-500 mt-1">
-                    {(imageFile.size / 1024).toFixed(1)} KB
-                  </p>
-                  <p className="text-xs text-slate-500 mt-2">
-                    Click to change image
-                  </p>
-                </div>
-              ) : (
-                <div className="text-slate-400">
-                  <p className="text-3xl mb-2">📷</p>
-                  <p className="font-medium">Click or drag an image here</p>
-                  <p className="text-xs text-slate-500 mt-1">
-                    PNG, JPG, WEBP — Max 5MB
-                  </p>
-                </div>
-              )}
+
+              Upload Image
+
             </div>
+
           )}
+
+          {imagePreview && (
+
+            <img
+              src={imagePreview}
+              className="mt-5 w-52 rounded-xl border border-slate-700"
+            />
+
+          )}
+
         </div>
 
-        {imagePreview && (
-          <div>
-            <label className="block text-white mb-2">Preview</label>
-            <div className="relative inline-block">
-              <img
-                src={imagePreview}
-                alt="Preview"
-                className="w-48 h-48 object-cover rounded-lg border border-slate-700"
-                onError={() => setImagePreview("")}
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  setImagePreview("");
-                  setImageFile(null);
-                  setFormData((prev) => ({ ...prev, image: "" }));
-                }}
-                className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-6 h-6 text-xs flex items-center justify-center hover:bg-red-700"
-              >
-                ✕
-              </button>
-            </div>
-          </div>
-        )}
+        {/* Category */}
 
         <div>
-          <label className="block text-white mb-2">Category</label>
+
+          <label className="block text-white mb-2">
+            Category
+          </label>
+
           <select
             name="category"
             value={formData.category}
             onChange={handleChange}
             className="w-full bg-slate-800 border border-slate-600 text-white p-3 rounded-lg"
           >
-            <option value="Clothing">Clothing</option>
-            <option value="Shoes">Shoes</option>
-            <option value="Accessories">Accessories</option>
-            <option value="Hoodies">Hoodies</option>
-            <option value="T-Shirts">T-Shirts</option>
+
+            <option>Clothing</option>
+            <option>Shoes</option>
+            <option>Accessories</option>
+            <option>Hoodies</option>
+            <option>T-Shirts</option>
+
           </select>
+
         </div>
 
+        {/* Price */}
+
         <div>
-          <label className="block text-white mb-2">Price (Rs)</label>
+
+          <label className="block text-white mb-2">
+            Price
+          </label>
+
           <input
             type="number"
             name="price"
             value={formData.price}
             onChange={handleChange}
-            placeholder="1999"
             className="w-full bg-slate-800 border border-slate-600 text-white p-3 rounded-lg"
             required
           />
+
+        </div>
+
+        {/* Featured */}
+
+        <div className="flex items-center gap-3 bg-slate-800 border border-slate-700 rounded-lg p-4">
+
+          <input
+            type="checkbox"
+            id="featured"
+            name="featured"
+            checked={formData.featured}
+            onChange={handleChange}
+            className="w-5 h-5 accent-yellow-500"
+          />
+
+          <label
+            htmlFor="featured"
+            className="text-white cursor-pointer"
+          >
+            ⭐ Mark this product as Featured
+          </label>
+
         </div>
 
         <button
-          type="submit"
           disabled={loading}
-          className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-semibold"
         >
           {loading ? "Adding..." : "Add Product"}
         </button>
+
       </form>
+
     </div>
   );
 }

@@ -14,26 +14,21 @@ export default function ProductsPage() {
 
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+
   const limit = 12;
 
-  // Tracks the most recent request so late-arriving (stale) responses
-  // from older keystrokes never overwrite newer results.
   const latestRequestId = useRef(0);
 
   useEffect(() => {
-    // Jab bhi search/category/sort change ho, page 1 pe reset karo
     setCurrentPage(1);
   }, [search, category, sort]);
 
   useEffect(() => {
-    // Debounce: search type karte waqt har letter pe fetch na ho,
-    // 400ms rukne ke baad hi request jaye.
     const timer = setTimeout(() => {
       fetchProducts();
     }, 400);
 
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, category, sort, currentPage]);
 
   const fetchProducts = async () => {
@@ -49,38 +44,28 @@ export default function ProductsPage() {
         limit,
       });
 
-      if (category && category !== "All") {
+      if (category !== "All") {
         params.append("category", category);
       }
 
       const res = await api.get(`/products?${params.toString()}`);
 
-      // Agar is response ke aane tak koi naya (baad wala) request
-      // ja chuka hai, to ye purana/stale response hai — ignore karo.
-      if (requestId !== latestRequestId.current) {
-        return;
-      }
+      if (requestId !== latestRequestId.current) return;
 
       const data = res.data;
 
       if (Array.isArray(data)) {
         setProducts(data);
         setTotalPages(1);
-      } else if (data && Array.isArray(data.products)) {
-        setProducts(data.products);
-        setTotalPages(data.totalPages || 1);
       } else {
-        console.error("Unexpected products response shape:", data);
-        setProducts([]);
-        setTotalPages(1);
+        setProducts(data.products || []);
+        setTotalPages(data.totalPages || 1);
       }
     } catch (error) {
-      if (requestId !== latestRequestId.current) {
-        return;
-      }
-      console.log("CATCH ERROR:", error.message);
-      console.log("Error response data:", JSON.stringify(error.response?.data));
-      console.log("Error status:", error.response?.status);
+      if (requestId !== latestRequestId.current) return;
+
+      console.log(error);
+
       setProducts([]);
       setTotalPages(1);
     } finally {
@@ -92,95 +77,175 @@ export default function ProductsPage() {
 
   const handlePageChange = (page) => {
     if (page < 1 || page > totalPages) return;
+
     setCurrentPage(page);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
   };
 
   const renderPageNumbers = () => {
     const pages = [];
+
     for (let i = 1; i <= totalPages; i++) {
       pages.push(
         <button
           key={i}
           onClick={() => handlePageChange(i)}
-          className={`px-4 py-2 rounded-lg border text-sm font-medium transition ${
+          className={`px-4 py-2 rounded-xl transition font-semibold cursor-pointer ${
             currentPage === i
-              ? "bg-[#D4AF37] text-black border-[#D4AF37]"
-              : "bg-[#1B1B1B] text-white border-gray-700 hover:border-[#D4AF37]"
+              ? "bg-[#D4AF37] text-black"
+              : "bg-[#0B1F33] text-white border border-[#D4AF37]/20 hover:border-[#D4AF37]"
           }`}
         >
           {i}
         </button>
       );
     }
+
     return pages;
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-6 pt-12">
-      <div className="flex flex-col lg:flex-row justify-between gap-4 mb-8">
-        <h1 className="text-4xl font-bold text-white">
-          Prod<span className="text-[#D4AF37]">ucts</span>
-        </h1>
+    <div className="max-w-7xl mx-auto px-6 py-12">
 
-        <div className="flex flex-col sm:flex-row gap-3">
+      {/* Header */}
+
+      <div className="flex flex-col lg:flex-row justify-between items-center gap-6 mb-10">
+
+        <div>
+          <h1 className="text-5xl font-bold text-white">
+            Our{" "}
+            <span className="text-[#D4AF37]">
+              Products
+            </span>
+          </h1>
+
+          <p className="text-gray-400 mt-2">
+            Browse our latest collection.
+          </p>
+        </div>
+
+        {/* Filters */}
+
+        <div className="flex flex-col lg:flex-row gap-4 w-full lg:w-auto">
+
           <input
             type="text"
-            placeholder="Search Product..."
-            className="px-4 py-3 rounded-lg border border-gray-700 bg-[#1B1B1B] text-white w-64 outline-none"
+            placeholder="🔍 Search Products..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            className="
+              w-full
+              lg:w-72
+              px-5
+              py-3
+              rounded-xl
+              bg-[#0B1F33]
+              border
+              border-[#D4AF37]/20
+              text-white
+              placeholder:text-gray-500
+              outline-none
+              transition
+              focus:border-[#D4AF37]
+              focus:ring-2
+              focus:ring-[#D4AF37]/20
+            "
           />
 
           <select
-            className="px-4 py-3 rounded-lg border border-gray-700 bg-[#1B1B1B] text-white outline-none"
             value={category}
             onChange={(e) => setCategory(e.target.value)}
+            className="
+              px-5
+              py-3
+              rounded-xl
+              bg-[#0B1F33]
+              border
+              border-[#D4AF37]/20
+              text-white
+              outline-none
+              cursor-pointer
+              transition
+              hover:border-[#D4AF37]
+              focus:border-[#D4AF37]
+              focus:ring-2
+              focus:ring-[#D4AF37]/20
+            "
           >
             <option>All</option>
             <option>Clothing</option>
+            <option>T-Shirts</option>
+            <option>Hoodies</option>
             <option>Shoes</option>
-            <option>Electronics</option>
             <option>Accessories</option>
           </select>
 
           <select
-            className="px-4 py-3 rounded-lg border border-gray-700 bg-[#1B1B1B] text-white outline-none"
             value={sort}
             onChange={(e) => setSort(e.target.value)}
+            className="
+              px-5
+              py-3
+              rounded-xl
+              bg-[#0B1F33]
+              border
+              border-[#D4AF37]/20
+              text-white
+              outline-none
+              cursor-pointer
+              transition
+              hover:border-[#D4AF37]
+              focus:border-[#D4AF37]
+              focus:ring-2
+              focus:ring-[#D4AF37]/20
+            "
           >
             <option value="newest">Newest First</option>
             <option value="oldest">Oldest First</option>
-            <option value="price_asc">Price: Low to High</option>
-            <option value="price_desc">Price: High to Low</option>
+            <option value="price_asc">Price: Low → High</option>
+            <option value="price_desc">Price: High → Low</option>
           </select>
+
         </div>
+
       </div>
 
+      {/* Products */}
+
       {loading ? (
-        <div className="text-center text-gray-400 py-16">
+        <div className="text-center text-gray-400 py-20">
           Loading Products...
         </div>
       ) : products.length === 0 ? (
-        <div className="text-center text-gray-400 py-16">
+        <div className="text-center text-gray-400 py-20">
           No Products Found
         </div>
       ) : (
         <>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-10">
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+
             {products.map((product) => (
-              <ProductCard key={product.id} product={product} />
+              <ProductCard
+                key={product.id}
+                product={product}
+              />
             ))}
+
           </div>
 
           {totalPages > 1 && (
-            <div className="flex justify-center items-center gap-2 flex-wrap mb-24">
+            <div className="flex justify-center items-center gap-3 flex-wrap mt-14">
+
               <button
                 onClick={() => handlePageChange(currentPage - 1)}
                 disabled={currentPage === 1}
-                className="px-4 py-2 rounded-lg border border-gray-700 bg-[#1B1B1B] text-white text-sm disabled:opacity-40 disabled:cursor-not-allowed hover:border-[#D4AF37]"
+                className="px-5 py-2 rounded-xl bg-[#0B1F33] border border-[#D4AF37]/20 text-white hover:border-[#D4AF37] disabled:opacity-40 cursor-pointer"
               >
-                Prev
+                Previous
               </button>
 
               {renderPageNumbers()}
@@ -188,10 +253,11 @@ export default function ProductsPage() {
               <button
                 onClick={() => handlePageChange(currentPage + 1)}
                 disabled={currentPage === totalPages}
-                className="px-4 py-2 rounded-lg border border-gray-700 bg-[#1B1B1B] text-white text-sm disabled:opacity-40 disabled:cursor-not-allowed hover:border-[#D4AF37]"
+                className="px-5 py-2 rounded-xl bg-[#0B1F33] border border-[#D4AF37]/20 text-white hover:border-[#D4AF37] disabled:opacity-40 cursor-pointer"
               >
                 Next
               </button>
+
             </div>
           )}
         </>

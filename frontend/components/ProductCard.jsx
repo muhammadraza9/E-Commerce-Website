@@ -33,6 +33,7 @@ export default function ProductCard({ product }) {
         hover:shadow-[#D4AF37]/20
       "
     >
+      {/* Image */}
       <div className="relative w-full h-64 overflow-hidden shrink-0">
         <img
           src={product.image}
@@ -46,36 +47,53 @@ export default function ProductCard({ product }) {
             group-hover:scale-110
           "
         />
+
+        {/* Featured Badge */}
+        {product.featured && (
+          <span className="absolute top-3 left-3 bg-yellow-500 text-black px-3 py-1 rounded-full text-xs font-bold shadow-lg">
+            ⭐ Featured
+          </span>
+        )}
+
+        {/* Category Badge */}
+        {product.category && (
+          <span className="absolute top-3 right-3 bg-black/70 backdrop-blur-sm text-white px-3 py-1 rounded-full text-xs">
+            {product.category}
+          </span>
+        )}
       </div>
 
-      <div className="p-3 flex flex-col">
+      {/* Content */}
+      <div className="p-4 flex flex-col flex-1">
+
         <h3 className="text-white text-lg font-semibold truncate">
           {product.name}
         </h3>
 
-        <div className="h-10 overflow-hidden mt-1">
+        <div className="h-12 overflow-hidden mt-2">
           <p className="text-gray-400 text-sm">
             {product.description}
           </p>
         </div>
 
-        <p className="text-[#D4AF37] text-xl font-bold mt-2">
+        <p className="text-[#D4AF37] text-2xl font-bold mt-3">
           Rs {product.price}
         </p>
 
-        <div className="mt-4 flex gap-2">
+        <div className="mt-auto pt-5 flex gap-2">
+
           <Link
             href={`/products/${product.id}`}
             className="
               flex-1
-              border border-[#D4AF37]
+              border
+              border-[#D4AF37]
               text-[#D4AF37]
               text-center
               py-2
               rounded-lg
-              text-sm
               font-semibold
-              transition-all
+              transition
               hover:bg-[#D4AF37]
               hover:text-black
             "
@@ -88,19 +106,17 @@ export default function ProductCard({ product }) {
             className="
               flex-1
               bg-[#D4AF37]
-              text-white
+              text-black
               py-2
               rounded-lg
-              text-sm
               font-semibold
-              transition-all
-              hover:bg-[#c9a227]
-              hover:scale-105
-              cursor-pointer
+              transition
+              hover:bg-yellow-400
             "
           >
-            Add To Cart
+            Add Cart
           </button>
+
         </div>
       </div>
     </div>
