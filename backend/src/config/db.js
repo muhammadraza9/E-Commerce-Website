@@ -7,35 +7,34 @@ const dbUrl = new URL(process.env.DATABASE_URL);
 
 const caPath = path.join(__dirname, "ca.pem");
 
-// ===============================
-// Reuse Prisma Client across serverless invocations (warm starts)
-// Prevents exhausting Aiven's limited connection pool
-// ===============================
+// Create adapter only once
+const adapter = new PrismaMariaDb({
+  host: dbUrl.hostname,
+  port: Number(dbUrl.port),
+  user: decodeURIComponent(dbUrl.username),
+  password: decodeURIComponent(dbUrl.password),
+  database: dbUrl.pathname.replace("/", ""),
+  connectionLimit: 3,
+  connectTimeout: 30000,     // socket connect timeout raised from default 1000ms to 30s
+  acquireTimeout: 30000,     // time to wait for a free connection from the pool
+  ssl: {
+    ca: fs.readFileSync(caPath, "utf8"),
+    rejectUnauthorized: true,
+  },
+});
 
-const globalForPrisma = globalThis;
+// Reuse Prisma Client
+const globalForPrisma = global;
 
-let prisma;
-
-if (!globalForPrisma.__prisma) {
-  const adapter = new PrismaMariaDb({
-    host: dbUrl.hostname,
-    port: Number(dbUrl.port),
-    user: decodeURIComponent(dbUrl.username),
-    password: decodeURIComponent(dbUrl.password),
-    database: dbUrl.pathname.replace("/", ""),
-    ssl: {
-      ca: fs.readFileSync(caPath, "utf8"),
-      rejectUnauthorized: true,
-    },
-    connectionLimit: 3, // keep low — Aiven free tier has limited max connections
-    acquireTimeout: 15000, // wait a bit longer for DB to wake up from auto-pause
-  });
-
-  globalForPrisma.__prisma = new PrismaClient({
+const prisma =
+  globalForPrisma.prisma ||
+  new PrismaClient({
     adapter,
+    log: ["error"],
   });
-}
 
-prisma = globalForPrisma.__prisma;
+if (process.env.NODE_ENV !== "production") {
+  globalForPrisma.prisma = prisma;
+}
 
 module.exports = prisma;

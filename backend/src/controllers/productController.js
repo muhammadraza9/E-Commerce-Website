@@ -1,102 +1,38 @@
 const prisma = require("../config/db");
 
 // ===============================
-// Get All Products + Search + Filter + Sort + Pagination
+// Get All Products
 // ===============================
-
 const getProducts = async (req, res) => {
   try {
-    const {
-      search = "",
-      category = "",
-      sort = "newest",
-      page = 1,
-      limit = 12,
-    } = req.query;
+    console.log("===== STEP 1 =====");
 
-    const where = {};
+    const count = await prisma.product.count();
+    console.log("===== STEP 2 =====");
+    console.log("Total Products:", count);
 
-    if (search) {
-      where.OR = [
-        {
-          name: {
-            contains: search,
-          },
-        },
-        {
-          description: {
-            contains: search,
-          },
-        },
-      ];
-    }
+    const products = await prisma.product.findMany();
+    console.log("===== STEP 3 =====");
 
-    if (category && category !== "All") {
-      where.category = category;
-    }
-
-    // ===============================
-    // Sorting Logic
-    // ===============================
-
-    let orderBy = { createdAt: "desc" }; // default: newest
-
-    if (sort === "price_asc") {
-      orderBy = { price: "asc" };
-    } else if (sort === "price_desc") {
-      orderBy = { price: "desc" };
-    } else if (sort === "oldest") {
-      orderBy = { createdAt: "asc" };
-    } else if (sort === "newest") {
-      orderBy = { createdAt: "desc" };
-    }
-
-    // ===============================
-    // Pagination Logic
-    // ===============================
-
-    const pageNumber = Math.max(Number(page) || 1, 1);
-    const limitNumber = Math.max(Number(limit) || 12, 1);
-    const skip = (pageNumber - 1) * limitNumber;
-
-    const [products, totalProducts] = await Promise.all([
-      prisma.product.findMany({
-        where,
-        orderBy,
-        skip,
-        take: limitNumber,
-      }),
-      prisma.product.count({ where }),
-    ]);
-
-    const totalPages = Math.ceil(totalProducts / limitNumber);
-
-    res.status(200).json({
-      products,
-      currentPage: pageNumber,
-      totalPages,
-      totalProducts,
-    });
+    res.status(200).json(products);
   } catch (err) {
-    console.log(err);
+    console.log("===== ERROR =====");
+    console.error(err);
 
     res.status(500).json({
       message: "Server Error",
+      error: err.message,
     });
   }
 };
-
 // ===============================
 // Get Single Product
 // ===============================
-
 const getProduct = async (req, res) => {
   try {
-    const id = Number(req.params.id);
-
     const product = await prisma.product.findUnique({
       where: {
-        id,
+        id: Number(req.params.id),
       },
     });
 
@@ -108,10 +44,12 @@ const getProduct = async (req, res) => {
 
     res.status(200).json(product);
   } catch (err) {
-    console.error("GET PRODUCT ERROR:", err);
+    console.error("GET PRODUCT ERROR");
+    console.error(err);
 
     res.status(500).json({
       message: "Server Error",
+      error: err.message,
     });
   }
 };
@@ -119,7 +57,6 @@ const getProduct = async (req, res) => {
 // ===============================
 // Create Product
 // ===============================
-
 const createProduct = async (req, res) => {
   try {
     const {
@@ -142,10 +79,12 @@ const createProduct = async (req, res) => {
 
     res.status(201).json(product);
   } catch (err) {
-    console.error("CREATE PRODUCT ERROR:", err);
+    console.error("CREATE PRODUCT ERROR");
+    console.error(err);
 
     res.status(500).json({
       message: "Server Error",
+      error: err.message,
     });
   }
 };
@@ -153,11 +92,8 @@ const createProduct = async (req, res) => {
 // ===============================
 // Update Product
 // ===============================
-
 const updateProduct = async (req, res) => {
   try {
-    const id = Number(req.params.id);
-
     const {
       name,
       description,
@@ -168,7 +104,7 @@ const updateProduct = async (req, res) => {
 
     const product = await prisma.product.update({
       where: {
-        id,
+        id: Number(req.params.id),
       },
       data: {
         name,
@@ -181,10 +117,12 @@ const updateProduct = async (req, res) => {
 
     res.status(200).json(product);
   } catch (err) {
-    console.error("UPDATE PRODUCT ERROR:", err);
+    console.error("UPDATE PRODUCT ERROR");
+    console.error(err);
 
     res.status(500).json({
       message: "Server Error",
+      error: err.message,
     });
   }
 };
@@ -192,14 +130,11 @@ const updateProduct = async (req, res) => {
 // ===============================
 // Delete Product
 // ===============================
-
 const deleteProduct = async (req, res) => {
   try {
-    const id = Number(req.params.id);
-
     await prisma.product.delete({
       where: {
-        id,
+        id: Number(req.params.id),
       },
     });
 
@@ -208,10 +143,12 @@ const deleteProduct = async (req, res) => {
       message: "Product deleted successfully",
     });
   } catch (err) {
-    console.error("DELETE PRODUCT ERROR:", err);
+    console.error("DELETE PRODUCT ERROR");
+    console.error(err);
 
     res.status(500).json({
       message: "Server Error",
+      error: err.message,
     });
   }
 };
