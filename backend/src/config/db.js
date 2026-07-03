@@ -15,8 +15,8 @@ const adapter = new PrismaMariaDb({
   password: decodeURIComponent(dbUrl.password),
   database: dbUrl.pathname.replace("/", ""),
   connectionLimit: 3,
-  connectTimeout: 30000,     // socket connect timeout raised from default 1000ms to 30s
-  acquireTimeout: 30000,     // time to wait for a free connection from the pool
+  connectTimeout: 30000,
+  acquireTimeout: 30000,
   ssl: {
     ca: fs.readFileSync(caPath, "utf8"),
     rejectUnauthorized: true,
