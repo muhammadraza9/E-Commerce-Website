@@ -20,9 +20,7 @@ const getProducts = async (req, res) => {
 
     const where = {};
 
-    // ===============================
     // Search
-    // ===============================
 
     if (search.trim()) {
       where.OR = [
@@ -39,40 +37,42 @@ const getProducts = async (req, res) => {
       ];
     }
 
-    // ===============================
-    // Category Filter
-    // ===============================
+    // Category
 
     if (category && category !== "All") {
       where.category = category;
     }
 
-    // ===============================
     // Sorting
-    // ===============================
 
-    let orderBy = { createdAt: "desc" };
+    let orderBy = {
+      createdAt: "desc",
+    };
 
     switch (sort) {
       case "oldest":
-        orderBy = { createdAt: "asc" };
+        orderBy = {
+          createdAt: "asc",
+        };
         break;
 
       case "price_asc":
-        orderBy = { price: "asc" };
+        orderBy = {
+          price: "asc",
+        };
         break;
 
       case "price_desc":
-        orderBy = { price: "desc" };
+        orderBy = {
+          price: "desc",
+        };
         break;
 
       default:
-        orderBy = { createdAt: "desc" };
+        orderBy = {
+          createdAt: "desc",
+        };
     }
-
-    // ===============================
-    // Fetch Products + Count
-    // ===============================
 
     const [products, totalProducts] = await Promise.all([
       prisma.product.findMany({
@@ -95,6 +95,31 @@ const getProducts = async (req, res) => {
     });
   } catch (err) {
     console.error("GET PRODUCTS ERROR:", err);
+
+    res.status(500).json({
+      message: "Server Error",
+    });
+  }
+};
+
+// ===============================
+// Get Featured Products
+// ===============================
+
+const getFeaturedProducts = async (req, res) => {
+  try {
+    const products = await prisma.product.findMany({
+      where: {
+        featured: true,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    res.status(200).json(products);
+  } catch (err) {
+    console.error("GET FEATURED PRODUCTS ERROR:", err);
 
     res.status(500).json({
       message: "Server Error",
@@ -144,6 +169,7 @@ const createProduct = async (req, res) => {
       image,
       price,
       category,
+      featured,
     } = req.body;
 
     const product = await prisma.product.create({
@@ -153,6 +179,7 @@ const createProduct = async (req, res) => {
         image,
         price: Number(price),
         category: category || "Clothing",
+        featured: featured || false,
       },
     });
 
@@ -180,6 +207,7 @@ const updateProduct = async (req, res) => {
       image,
       price,
       category,
+      featured,
     } = req.body;
 
     const product = await prisma.product.update({
@@ -192,6 +220,7 @@ const updateProduct = async (req, res) => {
         image,
         price: Number(price),
         category,
+        featured,
       },
     });
 
@@ -234,6 +263,7 @@ const deleteProduct = async (req, res) => {
 
 module.exports = {
   getProducts,
+  getFeaturedProducts,
   getProduct,
   createProduct,
   updateProduct,

@@ -47,7 +47,11 @@ model product {
   image       String      @db.LongText
   category    String      @default("Clothing")
   price       Float
+
+  featured    Boolean     @default(false)
+
   createdAt   DateTime    @default(now())
+
   orderitem   orderitem[]
 }
 
