@@ -40,7 +40,7 @@ const getProducts = async (req, res) => {
     }
 
     // ===============================
-    // Category
+    // Category Filter
     // ===============================
 
     if (category && category !== "All") {
@@ -48,12 +48,10 @@ const getProducts = async (req, res) => {
     }
 
     // ===============================
-    // Sort
+    // Sorting
     // ===============================
 
-    let orderBy = {
-      createdAt: "desc",
-    };
+    let orderBy = { createdAt: "desc" };
 
     switch (sort) {
       case "oldest":
@@ -72,21 +70,22 @@ const getProducts = async (req, res) => {
         orderBy = { createdAt: "desc" };
     }
 
-    console.log("SEARCH:", search);
-    console.log("WHERE:", JSON.stringify(where, null, 2));
+    // ===============================
+    // Fetch Products + Count
+    // ===============================
 
-    const products = await prisma.product.findMany({
-      where,
-      orderBy,
-      skip,
-      take: limitNumber,
-    });
+    const [products, totalProducts] = await Promise.all([
+      prisma.product.findMany({
+        where,
+        orderBy,
+        skip,
+        take: limitNumber,
+      }),
 
-    const totalProducts = await prisma.product.count({
-      where,
-    });
-
-    console.log("FOUND PRODUCTS:", products.length);
+      prisma.product.count({
+        where,
+      }),
+    ]);
 
     res.status(200).json({
       products,
@@ -94,9 +93,8 @@ const getProducts = async (req, res) => {
       totalPages: Math.ceil(totalProducts / limitNumber),
       totalProducts,
     });
-
   } catch (err) {
-    console.error(err);
+    console.error("GET PRODUCTS ERROR:", err);
 
     res.status(500).json({
       message: "Server Error",
