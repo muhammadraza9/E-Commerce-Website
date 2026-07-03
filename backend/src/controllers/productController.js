@@ -1,38 +1,124 @@
 const prisma = require("../config/db");
 
 // ===============================
-// Get All Products
+// Get All Products + Search + Filter + Sort + Pagination
 // ===============================
+
 const getProducts = async (req, res) => {
+
+    return res.json({
+    message: "NEW DEPLOY WORKING",
+    query: req.query,
+  });
+
   try {
-    console.log("===== STEP 1 =====");
+    const {
+      search = "",
+      category = "",
+      sort = "newest",
+      page = 1,
+      limit = 12,
+    } = req.query;
 
-    const count = await prisma.product.count();
-    console.log("===== STEP 2 =====");
-    console.log("Total Products:", count);
+    const where = {};
 
-    const products = await prisma.product.findMany();
-    console.log("===== STEP 3 =====");
+    if (search) {
+      where.OR = [
+        {
+          name: {
+            contains: search,
+          },
+        },
+        {
+          description: {
+            contains: search,
+          },
+        },
+      ];
+    }
 
-    res.status(200).json(products);
+    if (category && category !== "All") {
+      where.category = category;
+    }
+
+    // ===============================
+    // DEBUG LOGS
+    // ===============================
+
+    console.log("=================================");
+    console.log("REQ QUERY:", req.query);
+    console.log("SEARCH:", search);
+    console.log("CATEGORY:", category);
+    console.log("SORT:", sort);
+    console.log("PAGE:", page);
+    console.log("LIMIT:", limit);
+    console.log("WHERE:", JSON.stringify(where, null, 2));
+    console.log("=================================");
+
+    // ===============================
+    // Sorting Logic
+    // ===============================
+
+    let orderBy = { createdAt: "desc" };
+
+    if (sort === "price_asc") {
+      orderBy = { price: "asc" };
+    } else if (sort === "price_desc") {
+      orderBy = { price: "desc" };
+    } else if (sort === "oldest") {
+      orderBy = { createdAt: "asc" };
+    } else if (sort === "newest") {
+      orderBy = { createdAt: "desc" };
+    }
+
+    // ===============================
+    // Pagination Logic
+    // ===============================
+
+    const pageNumber = Math.max(Number(page) || 1, 1);
+    const limitNumber = Math.max(Number(limit) || 12, 1);
+    const skip = (pageNumber - 1) * limitNumber;
+
+    const [products, totalProducts] = await Promise.all([
+      prisma.product.findMany({
+        where,
+        orderBy,
+        skip,
+        take: limitNumber,
+      }),
+      prisma.product.count({ where }),
+    ]);
+
+    console.log("FOUND PRODUCTS:", products.length);
+
+    const totalPages = Math.ceil(totalProducts / limitNumber);
+
+    res.status(200).json({
+      products,
+      currentPage: pageNumber,
+      totalPages,
+      totalProducts,
+    });
   } catch (err) {
-    console.log("===== ERROR =====");
-    console.error(err);
+    console.error("GET PRODUCTS ERROR:", err);
 
     res.status(500).json({
       message: "Server Error",
-      error: err.message,
     });
   }
 };
+
 // ===============================
 // Get Single Product
 // ===============================
+
 const getProduct = async (req, res) => {
   try {
+    const id = Number(req.params.id);
+
     const product = await prisma.product.findUnique({
       where: {
-        id: Number(req.params.id),
+        id,
       },
     });
 
@@ -44,12 +130,10 @@ const getProduct = async (req, res) => {
 
     res.status(200).json(product);
   } catch (err) {
-    console.error("GET PRODUCT ERROR");
-    console.error(err);
+    console.error("GET PRODUCT ERROR:", err);
 
     res.status(500).json({
       message: "Server Error",
-      error: err.message,
     });
   }
 };
@@ -57,6 +141,7 @@ const getProduct = async (req, res) => {
 // ===============================
 // Create Product
 // ===============================
+
 const createProduct = async (req, res) => {
   try {
     const {
@@ -79,12 +164,10 @@ const createProduct = async (req, res) => {
 
     res.status(201).json(product);
   } catch (err) {
-    console.error("CREATE PRODUCT ERROR");
-    console.error(err);
+    console.error("CREATE PRODUCT ERROR:", err);
 
     res.status(500).json({
       message: "Server Error",
-      error: err.message,
     });
   }
 };
@@ -92,8 +175,11 @@ const createProduct = async (req, res) => {
 // ===============================
 // Update Product
 // ===============================
+
 const updateProduct = async (req, res) => {
   try {
+    const id = Number(req.params.id);
+
     const {
       name,
       description,
@@ -104,7 +190,7 @@ const updateProduct = async (req, res) => {
 
     const product = await prisma.product.update({
       where: {
-        id: Number(req.params.id),
+        id,
       },
       data: {
         name,
@@ -117,12 +203,10 @@ const updateProduct = async (req, res) => {
 
     res.status(200).json(product);
   } catch (err) {
-    console.error("UPDATE PRODUCT ERROR");
-    console.error(err);
+    console.error("UPDATE PRODUCT ERROR:", err);
 
     res.status(500).json({
       message: "Server Error",
-      error: err.message,
     });
   }
 };
@@ -130,11 +214,14 @@ const updateProduct = async (req, res) => {
 // ===============================
 // Delete Product
 // ===============================
+
 const deleteProduct = async (req, res) => {
   try {
+    const id = Number(req.params.id);
+
     await prisma.product.delete({
       where: {
-        id: Number(req.params.id),
+        id,
       },
     });
 
@@ -143,12 +230,10 @@ const deleteProduct = async (req, res) => {
       message: "Product deleted successfully",
     });
   } catch (err) {
-    console.error("DELETE PRODUCT ERROR");
-    console.error(err);
+    console.error("DELETE PRODUCT ERROR:", err);
 
     res.status(500).json({
       message: "Server Error",
-      error: err.message,
     });
   }
 };
