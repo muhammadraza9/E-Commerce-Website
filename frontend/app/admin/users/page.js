@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import api from "@/services/api";
 import { showSuccessToast, showErrorToast } from "@/utils/toast";
 
@@ -8,19 +8,23 @@ export default function AdminUsersPage() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState(null);
+  const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState("All");
 
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
+
     if (storedUser) {
       setCurrentUserId(JSON.parse(storedUser).id);
     }
+
     fetchUsers();
   }, []);
 
   const fetchUsers = async () => {
     try {
       const res = await api.get("/auth/users");
-      setUsers(res.data);
+      setUsers(res.data || []);
     } catch (error) {
       console.log(error);
       showErrorToast("Failed to load users");
@@ -35,72 +39,171 @@ export default function AdminUsersPage() {
     try {
       await api.delete(`/auth/users/${id}`);
       showSuccessToast("User deleted successfully");
-      setUsers((prev) => prev.filter((u) => u.id !== id));
+      setUsers((prev) => prev.filter((user) => user.id !== id));
     } catch (error) {
       console.log(error);
-      showErrorToast(
-        error?.response?.data?.message || "Failed to delete user"
-      );
+      showErrorToast(error?.response?.data?.message || "Failed to delete user");
     }
   };
 
+  const handleRoleChange = async (id, role) => {
+    try {
+      await api.patch(`/auth/users/${id}/role`, { role });
+
+      showSuccessToast("User role updated");
+
+      setUsers((prev) =>
+        prev.map((user) => (user.id === id ? { ...user, role } : user))
+      );
+    } catch (error) {
+      console.log(error);
+      showErrorToast("Failed to update user role");
+    }
+  };
+
+  const filteredUsers = useMemo(() => {
+    return users.filter((user) => {
+      const searchText = search.toLowerCase();
+
+      const matchesSearch =
+        user.username?.toLowerCase().includes(searchText) ||
+        user.email?.toLowerCase().includes(searchText);
+
+      const matchesRole = roleFilter === "All" || user.role === roleFilter;
+
+      return matchesSearch && matchesRole;
+    });
+  }, [users, search, roleFilter]);
+
+  const totalAdmins = users.filter((user) => user.role === "ADMIN").length;
+  const totalCustomers = users.filter((user) => user.role === "USER").length;
+
   if (loading) {
-    return <div className="text-center py-20 text-white">Loading...</div>;
+    return <div className="text-center py-20 text-white">Loading Users...</div>;
   }
 
   return (
-    <div className="max-w-5xl mx-auto">
-
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-12">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white">Manage <span className="text-[#D4AF37]"> Users </span> </h1>
-        <p className="text-gray-400 text-sm mt-1">
+        <p className="text-[#D4AF37] text-xs sm:text-sm font-semibold tracking-widest uppercase mb-2">
+          Admin Panel
+        </p>
+
+        <h1 className="text-3xl sm:text-4xl font-bold text-white">
+          Manage <span className="text-[#D4AF37]">Users</span>
+        </h1>
+
+        <p className="text-gray-400 text-sm mt-2">
           {users.length} user{users.length !== 1 ? "s" : ""} registered
         </p>
       </div>
 
-      <div className="bg-[#0d1117] border border-slate-700 rounded-2xl overflow-hidden">
-        <table className="w-full text-left">
-          <thead>
-            <tr className="border-b border-slate-700 text-gray-400 text-sm">
-              <th className="px-6 py-4">Username</th>
-              <th className="px-6 py-4">Email</th>
-              <th className="px-6 py-4">Role</th>
-              <th className="px-6 py-4">Joined</th>
-              <th className="px-6 py-4 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((u) => (
-              <tr
-                key={u.id}
-                className="border-b border-slate-800 hover:bg-slate-800/40 transition-colors"
-              >
-                <td className="px-6 py-4 text-white text-sm">
-                  {u.username}
-                </td>
-                <td className="px-6 py-4 text-gray-300 text-sm">
-                  {u.email}
-                </td>
-                <td className="px-6 py-4">
-                  <span
-                    className={`text-xs px-3 py-1 rounded-full font-medium ${
-                      u.role === "ADMIN"
-                        ? "bg-[#D4AF37]/20 text-[#D4AF37]"
-                        : "bg-slate-700 text-gray-300"
-                    }`}
-                  >
-                    {u.role}
-                  </span>
-                </td>
-                <td className="px-6 py-4 text-gray-400 text-sm">
-                  {new Date(u.createdAt).toLocaleDateString()}
-                </td>
-                <td className="px-6 py-4 text-right">
-                  <div className="flex justify-end gap-2">
-                    {u.id !== currentUserId ? (
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+        <div className="bg-[#0d1117] border border-slate-700 rounded-2xl p-5">
+          <p className="text-gray-400 text-sm">Total Users</p>
+          <h2 className="text-2xl font-bold text-white mt-1">
+            {users.length}
+          </h2>
+        </div>
+
+        <div className="bg-[#0d1117] border border-slate-700 rounded-2xl p-5">
+          <p className="text-gray-400 text-sm">Admins</p>
+          <h2 className="text-2xl font-bold text-[#D4AF37] mt-1">
+            {totalAdmins}
+          </h2>
+        </div>
+
+        <div className="bg-[#0d1117] border border-slate-700 rounded-2xl p-5">
+          <p className="text-gray-400 text-sm">Customers</p>
+          <h2 className="text-2xl font-bold text-green-400 mt-1">
+            {totalCustomers}
+          </h2>
+        </div>
+      </div>
+
+      <div className="bg-[#0d1117] border border-slate-700 rounded-2xl p-5 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <input
+            type="text"
+            placeholder="Search by username or email..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:border-[#D4AF37]"
+          />
+
+          <select
+            value={roleFilter}
+            onChange={(e) => setRoleFilter(e.target.value)}
+            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:border-[#D4AF37]"
+          >
+            <option value="All">All Roles</option>
+            <option value="ADMIN">ADMIN</option>
+            <option value="USER">USER</option>
+          </select>
+        </div>
+      </div>
+
+      {filteredUsers.length === 0 ? (
+        <div className="bg-[#0d1117] border border-slate-700 rounded-2xl p-12 text-center">
+          <p className="text-5xl mb-4">👤</p>
+          <h2 className="text-xl font-bold text-white">No Users Found</h2>
+          <p className="text-gray-400 mt-2">Try changing search or filter.</p>
+        </div>
+      ) : (
+        <div className="bg-[#0d1117] border border-slate-700 rounded-2xl overflow-x-auto">
+          <table className="w-full min-w-[850px] text-left">
+            <thead>
+              <tr className="border-b border-slate-700 text-gray-400 text-sm">
+                <th className="px-6 py-4">Username</th>
+                <th className="px-6 py-4">Email</th>
+                <th className="px-6 py-4">Role</th>
+                <th className="px-6 py-4">Joined</th>
+                <th className="px-6 py-4 text-right">Actions</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {filteredUsers.map((user) => (
+                <tr
+                  key={user.id}
+                  className="border-b border-slate-800 hover:bg-slate-800/40 transition-colors"
+                >
+                  <td className="px-6 py-4 text-white text-sm font-semibold">
+                    {user.username || "N/A"}
+                  </td>
+
+                  <td className="px-6 py-4 text-gray-300 text-sm">
+                    {user.email}
+                  </td>
+
+                  <td className="px-6 py-4">
+                    {user.id === currentUserId ? (
+                      <span className="text-xs px-3 py-1 rounded-full font-medium bg-[#D4AF37]/20 text-[#D4AF37]">
+                        {user.role}
+                      </span>
+                    ) : (
+                      <select
+                        value={user.role}
+                        onChange={(e) =>
+                          handleRoleChange(user.id, e.target.value)
+                        }
+                        className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-[#D4AF37]"
+                      >
+                        <option value="USER">USER</option>
+                        <option value="ADMIN">ADMIN</option>
+                      </select>
+                    )}
+                  </td>
+
+                  <td className="px-6 py-4 text-gray-400 text-sm">
+                    {new Date(user.createdAt).toLocaleDateString("en-PK")}
+                  </td>
+
+                  <td className="px-6 py-4 text-right">
+                    {user.id !== currentUserId ? (
                       <button
-                        onClick={() => handleDelete(u.id, u.email)}
-                        className="flex items-center gap-1.5 text-xs px-4 py-2 rounded-lg bg-red-500/10 text-red-400 border border-red-500/30 hover:bg-red-500 hover:text-white hover:border-red-500 transition-colors font-medium cursor-pointer"
+                        onClick={() => handleDelete(user.id, user.email)}
+                        className="text-xs px-4 py-2 rounded-lg bg-red-500/10 text-red-400 border border-red-500/30 hover:bg-red-500 hover:text-white hover:border-red-500 transition-colors font-medium cursor-pointer"
                       >
                         🗑️ Delete
                       </button>
@@ -109,14 +212,13 @@ export default function AdminUsersPage() {
                         Current User
                       </span>
                     )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

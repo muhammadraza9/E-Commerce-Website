@@ -1,10 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import api from "@/services/api";
 import Link from "next/link";
 
 export default function MyOrdersPage() {
+  const router = useRouter();
+
   const [user, setUser] = useState(null);
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -13,14 +16,15 @@ export default function MyOrdersPage() {
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
 
-    if (storedUser) {
-      const userData = JSON.parse(storedUser);
-      setUser(userData);
-      fetchOrders(userData.email);
-    } else {
-      setLoading(false);
+    if (!storedUser) {
+      router.push("/signin");
+      return;
     }
-  }, []);
+
+    const userData = JSON.parse(storedUser);
+    setUser(userData);
+    fetchOrders(userData.email);
+  }, [router]);
 
   const fetchOrders = async (email) => {
     try {
@@ -48,9 +52,7 @@ export default function MyOrdersPage() {
 
       setOrders((prev) =>
         prev.map((order) =>
-          order.id === orderId
-            ? { ...order, status: "Cancelled" }
-            : order
+          order.id === orderId ? { ...order, status: "Cancelled" } : order
         )
       );
     } catch (error) {
@@ -63,26 +65,19 @@ export default function MyOrdersPage() {
     switch (status) {
       case "Pending":
         return "bg-yellow-500";
-
       case "Processing":
         return "bg-blue-500";
-
       case "Shipped":
         return "bg-purple-500";
-
       case "Delivered":
         return "bg-green-500";
-
       case "Cancelled":
         return "bg-red-600";
-
       default:
         return "bg-gray-500";
     }
   };
 
-  // Total quantity of all items in an order (not just number of distinct products)
-  // e.g. 1 product with quantity 2 => "2 items", not "1 item"
   const getTotalQuantity = (items) =>
     items?.reduce((sum, item) => sum + (item.quantity || 1), 0) || 0;
 
@@ -95,17 +90,25 @@ export default function MyOrdersPage() {
     "Cancelled",
   ];
 
-  const filteredOrders =
-    filter === "All"
-      ? orders
-      : orders.filter((order) => order.status === filter);
+  const filteredOrders = useMemo(() => {
+    if (filter === "All") return orders;
+    return orders.filter((order) => order.status === filter);
+  }, [orders, filter]);
+
+  const totalSpent = useMemo(() => {
+    return orders.reduce((sum, order) => sum + Number(order.total || 0), 0);
+  }, [orders]);
+
+  const totalDelivered = orders.filter(
+    (order) => order.status === "Delivered"
+  ).length;
+
+  const activeOrders = orders.filter(
+    (order) => order.status !== "Delivered" && order.status !== "Cancelled"
+  ).length;
 
   if (loading) {
-    return (
-      <div className="text-center py-20 text-white">
-        Loading...
-      </div>
-    );
+    return <div className="text-center py-20 text-white">Loading...</div>;
   }
 
   if (!user) {
@@ -117,27 +120,56 @@ export default function MyOrdersPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-12">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white">
-          My Orders
+        <p className="text-[#D4AF37] text-xs sm:text-sm font-semibold tracking-widest uppercase mb-2">
+          Style Avenue
+        </p>
+
+        <h1 className="text-3xl sm:text-4xl font-bold text-white">
+          My <span className="text-[#D4AF37]">Orders</span>
         </h1>
 
         <p className="text-gray-400 mt-2">
-          {orders.length} order
-          {orders.length !== 1 ? "s" : ""} placed
+          {orders.length} order{orders.length !== 1 ? "s" : ""} placed
         </p>
       </div>
 
-      <div className="flex gap-2 mb-8 overflow-x-auto">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+        <div className="border border-slate-700 rounded-2xl p-5 bg-[#0d1117]">
+          <p className="text-gray-400 text-sm">Total Orders</p>
+          <h2 className="text-2xl font-bold text-white mt-1">
+            {orders.length}
+          </h2>
+        </div>
+
+        <div className="border border-slate-700 rounded-2xl p-5 bg-[#0d1117]">
+          <p className="text-gray-400 text-sm">Active Orders</p>
+          <h2 className="text-2xl font-bold text-[#D4AF37] mt-1">
+            {activeOrders}
+          </h2>
+        </div>
+
+        <div className="border border-slate-700 rounded-2xl p-5 bg-[#0d1117]">
+          <p className="text-gray-400 text-sm">Total Spent</p>
+          <h2 className="text-2xl font-bold text-green-400 mt-1">
+            Rs {totalSpent}
+          </h2>
+          <p className="text-gray-500 text-xs mt-1">
+            Delivered: {totalDelivered}
+          </p>
+        </div>
+      </div>
+
+      <div className="flex gap-2 mb-8 overflow-x-auto pb-2">
         {filters.map((f) => (
           <button
             key={f}
             onClick={() => setFilter(f)}
-            className={`px-4 py-2 rounded-full text-sm transition cursor-pointer ${
+            className={`px-4 py-2 rounded-full text-sm transition cursor-pointer whitespace-nowrap ${
               filter === f
                 ? "bg-[#D4AF37] text-black font-semibold"
-                : "bg-[#0d1117] border border-slate-700 text-gray-300"
+                : "bg-[#0d1117] border border-slate-700 text-gray-300 hover:border-[#D4AF37]/50"
             }`}
           >
             {f}
@@ -146,16 +178,20 @@ export default function MyOrdersPage() {
       </div>
 
       {filteredOrders.length === 0 ? (
-        <div className="border border-slate-700 rounded-2xl p-12 text-center">
+        <div className="border border-slate-700 rounded-2xl p-12 text-center bg-[#0d1117]">
           <p className="text-5xl mb-4">📭</p>
 
-          <p className="text-gray-400">
+          <h2 className="text-xl font-bold text-white mb-2">
             No Orders Found
+          </h2>
+
+          <p className="text-gray-400">
+            You do not have any {filter !== "All" ? filter : ""} orders yet.
           </p>
 
           <Link
             href="/products"
-            className="inline-block mt-6 bg-[#D4AF37] text-black px-6 py-3 rounded-xl font-semibold"
+            className="inline-block mt-6 bg-[#D4AF37] text-black px-6 py-3 rounded-xl font-semibold hover:scale-105 transition"
           >
             Start Shopping
           </Link>
@@ -169,25 +205,23 @@ export default function MyOrdersPage() {
               <Link
                 key={order.id}
                 href={`/profile/my-orders/${order.id}`}
-                className="block bg-[#0d1117] border border-slate-700 rounded-2xl p-6 hover:border-[#D4AF37]/50 transition"
+                className="block bg-[#0d1117] border border-slate-700 rounded-2xl p-5 sm:p-6 hover:border-[#D4AF37]/50 transition"
               >
-                <div className="flex justify-between items-start mb-5">
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 mb-5">
                   <div>
                     <p className="text-white font-semibold text-lg">
                       {order.trackingId}
                     </p>
 
                     <p className="text-gray-400 text-sm mt-1">
-                      {new Date(
-                        order.createdAt
-                      ).toLocaleDateString("en-PK")}
+                      {new Date(order.createdAt).toLocaleDateString("en-PK")}
                     </p>
                   </div>
 
                   <span
                     className={`${getStatusColor(
                       order.status
-                    )} px-3 py-1 rounded-full text-white text-xs`}
+                    )} px-3 py-1 rounded-full text-white text-xs w-fit`}
                   >
                     {order.status}
                   </span>
@@ -196,20 +230,11 @@ export default function MyOrdersPage() {
                 {order.items?.length > 0 && (
                   <div className="space-y-2 mb-4">
                     {order.items.slice(0, 3).map((item, index) => (
-                      <div
-                        key={index}
-                        className="flex items-center gap-3"
-                      >
-                        <div className="w-12 h-12 rounded-lg overflow-hidden border border-slate-700 shrink-0">
+                      <div key={index} className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-lg overflow-hidden border border-slate-700 shrink-0 bg-slate-900">
                           <img
-                            src={
-                              item.product?.image ||
-                              "/placeholder.png"
-                            }
-                            alt={
-                              item.product?.name ||
-                              "Product"
-                            }
+                            src={item.product?.image || "/placeholder.png"}
+                            alt={item.product?.name || "Product"}
                             className="w-full h-full object-cover"
                           />
                         </div>
@@ -235,11 +260,10 @@ export default function MyOrdersPage() {
                   </div>
                 )}
 
-                <div className="border-t border-slate-700 pt-4 flex justify-between items-center">
+                <div className="border-t border-slate-700 pt-4 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
                   <div>
                     <p className="text-gray-400 text-sm">
-                      {totalQty} item
-                      {totalQty !== 1 ? "s" : ""}
+                      {totalQty} item{totalQty !== 1 ? "s" : ""}
                     </p>
 
                     <p className="text-[#D4AF37] font-bold mt-1">
@@ -247,17 +271,21 @@ export default function MyOrdersPage() {
                     </p>
                   </div>
 
-                  {order.status !== "Delivered" &&
-                    order.status !== "Cancelled" && (
-                      <button
-                        onClick={(e) =>
-                          cancelOrder(e, order.id)
-                        }
-                        className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg text-white text-sm cursor-pointer"
-                      >
-                        Cancel Order
-                      </button>
-                    )}
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <span className="px-4 py-2 rounded-lg border border-[#D4AF37]/40 text-[#D4AF37] text-sm text-center">
+                      View Details
+                    </span>
+
+                    {order.status !== "Delivered" &&
+                      order.status !== "Cancelled" && (
+                        <button
+                          onClick={(e) => cancelOrder(e, order.id)}
+                          className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg text-white text-sm cursor-pointer"
+                        >
+                          Cancel Order
+                        </button>
+                      )}
+                  </div>
                 </div>
               </Link>
             );

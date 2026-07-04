@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import { createContext, useState, useEffect } from "react";
+import { createContext, useEffect, useMemo, useState } from "react";
 
 export const CartContext = createContext();
 
@@ -9,109 +9,107 @@ export default function CartProvider({ children }) {
   const [checkoutItems, setCheckoutItems] = useState([]);
   const [isLoaded, setIsLoaded] = useState(false);
 
+  const getCurrentUser = () => {
+    if (typeof window === "undefined") return null;
+
+    try {
+      return JSON.parse(localStorage.getItem("user"));
+    } catch {
+      return null;
+    }
+  };
+
+  const getCartKey = () => {
+    const user = getCurrentUser();
+    return user?.email ? `cart_${user.email}` : null;
+  };
+
   useEffect(() => {
     const loadCart = () => {
-      const user = JSON.parse(
-        localStorage.getItem("user")
-      );
+      const cartKey = getCartKey();
 
-      if (!user) {
+      if (!cartKey) {
         setCart([]);
         setIsLoaded(true);
         return;
       }
 
-      const userCart = localStorage.getItem(
-        `cart_${user.email}`
-      );
-
-      setCart(
-        userCart ? JSON.parse(userCart) : []
-      );
-
+      const storedCart = localStorage.getItem(cartKey);
+      setCart(storedCart ? JSON.parse(storedCart) : []);
       setIsLoaded(true);
     };
 
     loadCart();
 
-    window.addEventListener(
-      "authChange",
-      loadCart
-    );
+    window.addEventListener("authChange", loadCart);
 
     return () => {
-      window.removeEventListener(
-        "authChange",
-        loadCart
-      );
+      window.removeEventListener("authChange", loadCart);
     };
   }, []);
 
   useEffect(() => {
     if (!isLoaded) return;
 
-    const user = JSON.parse(
-      localStorage.getItem("user")
-    );
+    const cartKey = getCartKey();
+    if (!cartKey) return;
 
-    if (!user) return;
-
-    localStorage.setItem(
-      `cart_${user.email}`,
-      JSON.stringify(cart)
-    );
+    localStorage.setItem(cartKey, JSON.stringify(cart));
   }, [cart, isLoaded]);
 
-  // quantity: kitni quantity add karni hai (default 1)
-  // Agar product cart mein already hai, to quantity ADD ho jayegi
-  // (jaise professional websites mein hota hai - duplicate item nahi banta)
   const addToCart = (product, quantity = 1) => {
-    const existingItem = cart.find(
-      (item) => item.id === product.id
-    );
+    setCart((prev) => {
+      const existingItem = prev.find((item) => item.id === product.id);
 
-    if (existingItem) {
-      setCart(
-        cart.map((item) =>
+      if (existingItem) {
+        return prev.map((item) =>
           item.id === product.id
-            ? {
-                ...item,
-                quantity:
-                  item.quantity + quantity,
-              }
+            ? { ...item, quantity: item.quantity + quantity }
             : item
-        )
-      );
-    } else {
-      setCart([
-        ...cart,
-        {
-          ...product,
-          quantity,
-        },
-      ]);
-    }
+        );
+      }
+
+      return [...prev, { ...product, quantity }];
+    });
   };
 
-  // Cart page par quantity directly set karne ke liye (e.g. +/- buttons, ya manual input)
   const updateQuantity = (id, quantity) => {
     if (quantity < 1) return;
 
-    setCart(
-      cart.map((item) =>
-        item.id === id
-          ? { ...item, quantity }
+    setCart((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, quantity } : item))
+    );
+  };
+
+  const increaseQuantity = (id) => {
+    setCart((prev) =>
+      prev.map((item) =>
+        item.id === id ? { ...item, quantity: item.quantity + 1 } : item
+      )
+    );
+  };
+
+  const decreaseQuantity = (id) => {
+    setCart((prev) =>
+      prev.map((item) =>
+        item.id === id && item.quantity > 1
+          ? { ...item, quantity: item.quantity - 1 }
           : item
       )
     );
   };
 
   const removeFromCart = (id) => {
-    setCart(
-      cart.filter(
-        (item) => item.id !== id
-      )
-    );
+    setCart((prev) => prev.filter((item) => item.id !== id));
+  };
+
+  const removeSelectedFromCart = (ids) => {
+    setCart((prev) => prev.filter((item) => !ids.includes(item.id)));
+  };
+
+  const clearCart = () => {
+    setCart([]);
+    setCheckoutItems([]);
   };
 
   const startCheckout = (items) => {
@@ -119,32 +117,39 @@ export default function CartProvider({ children }) {
   };
 
   const removeCheckedOutItems = (ids) => {
-    setCart((prev) =>
-      prev.filter(
-        (item) =>
-          !ids.includes(item.id)
-      )
-    );
-
+    setCart((prev) => prev.filter((item) => !ids.includes(item.id)));
     setCheckoutItems([]);
   };
 
-  const clearCart = () => {
-    setCart([]);
-  };
+  const cartTotal = useMemo(() => {
+    return cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  }, [cart]);
+
+  const cartTotalQuantity = useMemo(() => {
+    return cart.reduce((sum, item) => sum + item.quantity, 0);
+  }, [cart]);
 
   return (
     <CartContext.Provider
       value={{
         cart,
         setCart,
+
         addToCart,
         updateQuantity,
+        increaseQuantity,
+        decreaseQuantity,
+
         removeFromCart,
+        removeSelectedFromCart,
+        clearCart,
+
         checkoutItems,
         startCheckout,
         removeCheckedOutItems,
-        clearCart,
+
+        cartTotal,
+        cartTotalQuantity,
       }}
     >
       {children}

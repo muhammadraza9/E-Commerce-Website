@@ -10,18 +10,18 @@ export default function ProductsPage() {
 
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All");
+  const [featured, setFeatured] = useState("All");
   const [sort, setSort] = useState("newest");
 
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
   const limit = 12;
-
   const latestRequestId = useRef(0);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, category, sort]);
+  }, [search, category, featured, sort]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -29,7 +29,7 @@ export default function ProductsPage() {
     }, 400);
 
     return () => clearTimeout(timer);
-  }, [search, category, sort, currentPage]);
+  }, [search, category, featured, sort, currentPage]);
 
   const fetchProducts = async () => {
     const requestId = ++latestRequestId.current;
@@ -46,6 +46,10 @@ export default function ProductsPage() {
 
       if (category !== "All") {
         params.append("category", category);
+      }
+
+      if (featured !== "All") {
+        params.append("featured", featured);
       }
 
       const res = await api.get(`/products?${params.toString()}`);
@@ -65,7 +69,6 @@ export default function ProductsPage() {
       if (requestId !== latestRequestId.current) return;
 
       console.log(error);
-
       setProducts([]);
       setTotalPages(1);
     } finally {
@@ -110,17 +113,11 @@ export default function ProductsPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-12">
-
       {/* Header */}
-
       <div className="flex flex-col lg:flex-row justify-between items-center gap-6 mb-10">
-
         <div>
           <h1 className="text-5xl font-bold text-white">
-            Our{" "}
-            <span className="text-[#D4AF37]">
-              Products
-            </span>
+            Our <span className="text-[#D4AF37]">Products</span>
           </h1>
 
           <p className="text-gray-400 mt-2">
@@ -129,9 +126,7 @@ export default function ProductsPage() {
         </div>
 
         {/* Filters */}
-
         <div className="flex flex-col lg:flex-row gap-4 w-full lg:w-auto">
-
           <input
             type="text"
             placeholder="🔍 Search Products..."
@@ -176,12 +171,37 @@ export default function ProductsPage() {
               focus:ring-[#D4AF37]/20
             "
           >
-            <option>All</option>
-            <option>Clothing</option>
-            <option>T-Shirts</option>
-            <option>Hoodies</option>
-            <option>Shoes</option>
-            <option>Accessories</option>
+            <option value="All">All</option>
+            <option value="Clothing">Clothing</option>
+            <option value="T-Shirts">T-Shirts</option>
+            <option value="Hoodies">Hoodies</option>
+            <option value="Shoes">Shoes</option>
+            <option value="Accessories">Accessories</option>
+          </select>
+
+          <select
+            value={featured}
+            onChange={(e) => setFeatured(e.target.value)}
+            className="
+              px-5
+              py-3
+              rounded-xl
+              bg-[#0B1F33]
+              border
+              border-[#D4AF37]/20
+              text-white
+              outline-none
+              cursor-pointer
+              transition
+              hover:border-[#D4AF37]
+              focus:border-[#D4AF37]
+              focus:ring-2
+              focus:ring-[#D4AF37]/20
+            "
+          >
+            <option value="All">All Products</option>
+            <option value="true">Featured Only</option>
+            <option value="false">Non Featured</option>
           </select>
 
           <select
@@ -209,13 +229,10 @@ export default function ProductsPage() {
             <option value="price_asc">Price: Low → High</option>
             <option value="price_desc">Price: High → Low</option>
           </select>
-
         </div>
-
       </div>
 
       {/* Products */}
-
       {loading ? (
         <div className="text-center text-gray-400 py-20">
           Loading Products...
@@ -227,19 +244,13 @@ export default function ProductsPage() {
       ) : (
         <>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
-
             {products.map((product) => (
-              <ProductCard
-                key={product.id}
-                product={product}
-              />
+              <ProductCard key={product.id} product={product} />
             ))}
-
           </div>
 
           {totalPages > 1 && (
             <div className="flex justify-center items-center gap-3 flex-wrap mt-14">
-
               <button
                 onClick={() => handlePageChange(currentPage - 1)}
                 disabled={currentPage === 1}
@@ -257,7 +268,6 @@ export default function ProductsPage() {
               >
                 Next
               </button>
-
             </div>
           )}
         </>

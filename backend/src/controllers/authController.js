@@ -16,8 +16,7 @@ exports.register = async (req, res) => {
       });
     }
 
-    const hashedPassword =
-      await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(password, 10);
 
     const user = await prisma.user.create({
       data: {
@@ -49,11 +48,7 @@ exports.login = async (req, res) => {
       });
     }
 
-    const match =
-      await bcrypt.compare(
-        password,
-        user.password
-      );
+    const match = await bcrypt.compare(password, user.password);
 
     if (!match) {
       return res.status(400).json({
@@ -72,10 +67,96 @@ exports.login = async (req, res) => {
       }
     );
 
+    const { password: userPassword, ...safeUser } = user;
+
     res.json({
       token,
       role: user.role,
-      user,
+      user: safeUser,
+    });
+  } catch (err) {
+    res.status(500).json({
+      error: err.message,
+    });
+  }
+};
+
+exports.updateProfile = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { username } = req.body;
+
+    if (!username || username.trim() === "") {
+      return res.status(400).json({
+        message: "Username is required",
+      });
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        username: username.trim(),
+      },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        role: true,
+        createdAt: true,
+      },
+    });
+
+    res.json({
+      message: "Profile updated successfully",
+      user: updatedUser,
+    });
+  } catch (err) {
+    res.status(500).json({
+      error: err.message,
+    });
+  }
+};
+
+exports.changePassword = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { oldPassword, newPassword } = req.body;
+
+    if (!oldPassword || !newPassword) {
+      return res.status(400).json({
+        message: "Old password and new password are required",
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        message: "New password must be at least 6 characters",
+      });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    const match = await bcrypt.compare(oldPassword, user.password);
+
+    if (!match) {
+      return res.status(400).json({
+        message: "Old password is incorrect",
+      });
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        password: hashedPassword,
+      },
+    });
+
+    res.json({
+      message: "Password changed successfully",
     });
   } catch (err) {
     res.status(500).json({

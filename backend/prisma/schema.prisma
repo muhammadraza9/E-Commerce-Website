@@ -33,6 +33,7 @@ model orderitem {
   productId Int
   quantity  Int
   price     Float
+
   order     order   @relation(fields: [orderId], references: [id], map: "OrderItem_orderId_fkey")
   product   product @relation(fields: [productId], references: [id], map: "OrderItem_productId_fkey")
 
@@ -47,12 +48,11 @@ model product {
   image       String      @db.LongText
   category    String      @default("Clothing")
   price       Float
-
   featured    Boolean     @default(false)
-
   createdAt   DateTime    @default(now())
 
   orderitem   orderitem[]
+  reviews     review[]
 }
 
 model user {
@@ -62,5 +62,24 @@ model user {
   password  String
   role      String   @default("USER")
   createdAt DateTime @default(now())
+
   orders    order[]
+  reviews   review[]
+}
+
+model review {
+  id        Int      @id @default(autoincrement())
+  rating    Int
+  comment   String  @db.Text
+  userId    Int
+  productId Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      user     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product   product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@index([userId])
+  @@index([productId])
 }
