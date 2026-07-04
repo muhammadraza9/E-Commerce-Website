@@ -1,7 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import api from "@/services/api";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  CartesianGrid,
+} from "recharts";
 
 export default function AdminPage() {
   const [analytics, setAnalytics] = useState({
@@ -20,6 +29,7 @@ export default function AdminPage() {
     recentOrders: [],
     latestUsers: [],
     latestReviews: [],
+    monthlyRevenue: [],
   });
 
   const [loading, setLoading] = useState(true);
@@ -38,6 +48,41 @@ export default function AdminPage() {
       setLoading(false);
     }
   };
+
+  const monthlyRevenueData = useMemo(() => {
+    if (analytics.monthlyRevenue?.length > 0) {
+      return analytics.monthlyRevenue;
+    }
+
+    const months = [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec",
+    ];
+
+    const grouped = {};
+
+    analytics.recentOrders?.forEach((order) => {
+      const date = new Date(order.createdAt);
+      const month = months[date.getMonth()];
+
+      grouped[month] = (grouped[month] || 0) + Number(order.total || 0);
+    });
+
+    return months.map((month) => ({
+      month,
+      revenue: grouped[month] || 0,
+    }));
+  }, [analytics]);
 
   const statusCards = [
     {
@@ -92,40 +137,31 @@ export default function AdminPage() {
       </div>
 
       <div className="grid lg:grid-cols-5 md:grid-cols-2 gap-5 mb-8">
-        <div className="bg-[#0B1F33] p-6 rounded-2xl border border-[#D4AF37]/20 shadow-xl shadow-black/20">
-          <p className="text-gray-400 text-sm">Total Revenue</p>
-          <h2 className="text-2xl font-bold text-[#D4AF37] mt-2">
-            Rs {analytics.totalRevenue}
-          </h2>
-        </div>
-
-        <div className="bg-[#0B1F33] p-6 rounded-2xl border border-[#D4AF37]/20 shadow-xl shadow-black/20">
-          <p className="text-gray-400 text-sm">Total Orders</p>
-          <h2 className="text-3xl font-bold text-white mt-2">
-            {analytics.totalOrders}
-          </h2>
-        </div>
-
-        <div className="bg-[#0B1F33] p-6 rounded-2xl border border-[#D4AF37]/20 shadow-xl shadow-black/20">
-          <p className="text-gray-400 text-sm">Total Users</p>
-          <h2 className="text-3xl font-bold text-green-400 mt-2">
-            {analytics.totalUsers}
-          </h2>
-        </div>
-
-        <div className="bg-[#0B1F33] p-6 rounded-2xl border border-[#D4AF37]/20 shadow-xl shadow-black/20">
-          <p className="text-gray-400 text-sm">Products</p>
-          <h2 className="text-3xl font-bold text-blue-400 mt-2">
-            {analytics.totalProducts}
-          </h2>
-        </div>
-
-        <div className="bg-[#0B1F33] p-6 rounded-2xl border border-[#D4AF37]/20 shadow-xl shadow-black/20">
-          <p className="text-gray-400 text-sm">Reviews</p>
-          <h2 className="text-3xl font-bold text-yellow-400 mt-2">
-            {analytics.totalReviews}
-          </h2>
-        </div>
+        <Card
+          title="Total Revenue"
+          value={`Rs ${analytics.totalRevenue}`}
+          color="text-[#D4AF37]"
+        />
+        <Card
+          title="Total Orders"
+          value={analytics.totalOrders}
+          color="text-white"
+        />
+        <Card
+          title="Total Users"
+          value={analytics.totalUsers}
+          color="text-green-400"
+        />
+        <Card
+          title="Products"
+          value={analytics.totalProducts}
+          color="text-blue-400"
+        />
+        <Card
+          title="Reviews"
+          value={analytics.totalReviews}
+          color="text-yellow-400"
+        />
       </div>
 
       <div className="bg-[#0B1F33] border border-[#D4AF37]/20 rounded-2xl p-6 mb-8 shadow-xl shadow-black/20">
@@ -149,81 +185,63 @@ export default function AdminPage() {
       </div>
 
       <div className="grid lg:grid-cols-2 gap-8 mb-8">
-        <div className="bg-[#0B1F33] border border-[#D4AF37]/20 rounded-2xl p-6 shadow-xl shadow-black/20">
-          <h2 className="text-xl font-bold text-white mb-5">
-            Recent Orders
-          </h2>
-
+        <Section title="Recent Orders">
           {analytics.recentOrders?.length === 0 ? (
             <p className="text-gray-400">No recent orders found.</p>
           ) : (
-            <div className="space-y-4">
-              {analytics.recentOrders?.map((order) => (
-                <div
-                  key={order.id}
-                  className="bg-[#071827] border border-[#D4AF37]/10 rounded-xl p-4"
-                >
-                  <div className="flex justify-between gap-3">
-                    <div>
-                      <p className="text-white font-semibold">
-                        {order.trackingId}
-                      </p>
-                      <p className="text-gray-400 text-sm mt-1">
-                        {order.customer}
-                      </p>
-                    </div>
-
-                    <span className="text-[#D4AF37] font-bold">
-                      Rs {order.total}
-                    </span>
+            analytics.recentOrders?.map((order) => (
+              <div
+                key={order.id}
+                className="bg-[#071827] border border-[#D4AF37]/10 rounded-xl p-4"
+              >
+                <div className="flex justify-between gap-3">
+                  <div>
+                    <p className="text-white font-semibold">
+                      {order.trackingId}
+                    </p>
+                    <p className="text-gray-400 text-sm mt-1">
+                      {order.customer}
+                    </p>
                   </div>
 
-                  <p className="text-gray-500 text-xs mt-2">
-                    {new Date(order.createdAt).toLocaleDateString("en-PK")} •{" "}
-                    {order.status}
-                  </p>
+                  <span className="text-[#D4AF37] font-bold">
+                    Rs {order.total}
+                  </span>
                 </div>
-              ))}
-            </div>
+
+                <p className="text-gray-500 text-xs mt-2">
+                  {new Date(order.createdAt).toLocaleDateString("en-PK")} •{" "}
+                  {order.status}
+                </p>
+              </div>
+            ))
           )}
-        </div>
+        </Section>
 
-        <div className="bg-[#0B1F33] border border-[#D4AF37]/20 rounded-2xl p-6 shadow-xl shadow-black/20">
-          <h2 className="text-xl font-bold text-white mb-5">
-            Latest Users
-          </h2>
-
+        <Section title="Latest Users">
           {analytics.latestUsers?.length === 0 ? (
             <p className="text-gray-400">No users found.</p>
           ) : (
-            <div className="space-y-4">
-              {analytics.latestUsers?.map((user) => (
-                <div
-                  key={user.id}
-                  className="bg-[#071827] border border-[#D4AF37]/10 rounded-xl p-4 flex justify-between items-center gap-3"
-                >
-                  <div>
-                    <p className="text-white font-semibold">
-                      {user.username}
-                    </p>
-                    <p className="text-gray-400 text-sm">{user.email}</p>
-                  </div>
-
-                  <span className="text-xs px-3 py-1 rounded-full bg-[#D4AF37]/20 text-[#D4AF37]">
-                    {user.role}
-                  </span>
+            analytics.latestUsers?.map((user) => (
+              <div
+                key={user.id}
+                className="bg-[#071827] border border-[#D4AF37]/10 rounded-xl p-4 flex justify-between items-center gap-3"
+              >
+                <div>
+                  <p className="text-white font-semibold">{user.username}</p>
+                  <p className="text-gray-400 text-sm">{user.email}</p>
                 </div>
-              ))}
-            </div>
+
+                <span className="text-xs px-3 py-1 rounded-full bg-[#D4AF37]/20 text-[#D4AF37]">
+                  {user.role}
+                </span>
+              </div>
+            ))
           )}
-        </div>
+        </Section>
       </div>
 
-      <div className="bg-[#0B1F33] border border-[#D4AF37]/20 rounded-2xl p-6 shadow-xl shadow-black/20">
-        <h2 className="text-xl font-bold text-white mb-5">
-          Latest Reviews
-        </h2>
-
+      <Section title="Latest Reviews">
         {analytics.latestReviews?.length === 0 ? (
           <p className="text-gray-400">No reviews found.</p>
         ) : (
@@ -263,7 +281,91 @@ export default function AdminPage() {
             ))}
           </div>
         )}
+      </Section>
+
+      <div className="bg-[#0B1F33] border border-[#D4AF37]/20 rounded-2xl p-6 mt-8 shadow-xl shadow-black/20">
+        <div className="mb-6">
+          <h2 className="text-xl font-bold text-white">
+            Sales Analytics
+          </h2>
+
+          <p className="text-gray-400 text-sm mt-1">
+            Monthly revenue flow based on orders.
+          </p>
+        </div>
+
+        <div className="h-80">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={monthlyRevenueData}>
+              <CartesianGrid stroke="rgba(212,175,55,0.12)" />
+
+              <XAxis
+                dataKey="month"
+                stroke="#9CA3AF"
+                tick={{ fill: "#9CA3AF", fontSize: 12 }}
+              />
+
+              <YAxis
+                stroke="#9CA3AF"
+                tick={{ fill: "#9CA3AF", fontSize: 12 }}
+              />
+
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: "#071827",
+                  border: "1px solid rgba(212,175,55,0.3)",
+                  borderRadius: "12px",
+                  color: "#fff",
+                }}
+                labelStyle={{
+                  color: "#D4AF37",
+                }}
+              />
+
+              <Line
+                type="monotone"
+                dataKey="revenue"
+                stroke="#D4AF37"
+                strokeWidth={3}
+                dot={{
+                  r: 5,
+                  fill: "#D4AF37",
+                  stroke: "#071827",
+                  strokeWidth: 2,
+                }}
+                activeDot={{
+                  r: 8,
+                  fill: "#D4AF37",
+                  stroke: "#fff",
+                  strokeWidth: 2,
+                }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
       </div>
+    </div>
+  );
+}
+
+function Card({ title, value, color }) {
+  return (
+    <div className="bg-[#0B1F33] p-6 rounded-2xl border border-[#D4AF37]/20 shadow-xl shadow-black/20">
+      <p className="text-gray-400 text-sm">{title}</p>
+
+      <h2 className={`text-2xl sm:text-3xl font-bold mt-2 ${color}`}>
+        {value}
+      </h2>
+    </div>
+  );
+}
+
+function Section({ title, children }) {
+  return (
+    <div className="bg-[#0B1F33] border border-[#D4AF37]/20 rounded-2xl p-6 shadow-xl shadow-black/20">
+      <h2 className="text-xl font-bold text-white mb-5">{title}</h2>
+
+      <div className="space-y-4">{children}</div>
     </div>
   );
 }
