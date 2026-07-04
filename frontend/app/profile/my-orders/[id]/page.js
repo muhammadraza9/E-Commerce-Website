@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import api from "@/services/api";
-import Link from "next/link";
+import { generateInvoicePDF } from "@/utils/invoiceGenerator";
 
 export default function OrderDetailPage() {
   const { id } = useParams();
@@ -54,7 +54,7 @@ export default function OrderDetailPage() {
   };
 
   const handleDownloadInvoice = () => {
-    window.print();
+    generateInvoicePDF(order);
   };
 
   const getStatusColor = (status) => {
@@ -107,7 +107,7 @@ export default function OrderDetailPage() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-12">
-      <div className="mb-6 print:hidden">
+      <div className="mb-6">
         <button
           onClick={() => router.push("/profile/my-orders")}
           className="inline-flex items-center gap-2 px-5 py-3 rounded-xl border border-[#D4AF37]/40 text-[#D4AF37] font-semibold hover:bg-[#D4AF37]/10 hover:scale-105 transition"
@@ -180,6 +180,16 @@ export default function OrderDetailPage() {
               {totalQuantity}
             </p>
 
+            <p className="text-gray-300 mt-2">
+              <strong className="text-white">Payment Method:</strong>{" "}
+              {order.paymentMethod || "COD"}
+            </p>
+
+            <p className="text-gray-300 mt-2">
+              <strong className="text-white">Payment Status:</strong>{" "}
+              {order.paymentStatus || "PENDING"}
+            </p>
+
             <p className="text-[#D4AF37] font-bold text-lg mt-4">
               Total: Rs {order.total}
             </p>
@@ -229,12 +239,12 @@ export default function OrderDetailPage() {
           )}
         </div>
 
-        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 print:hidden">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
           <button
             onClick={handleDownloadInvoice}
             className="px-5 py-3 rounded-lg bg-[#D4AF37] text-black font-semibold hover:scale-105 transition"
           >
-            Download Invoice
+            📄 Download Invoice
           </button>
 
           {order.status !== "Delivered" && order.status !== "Cancelled" && (

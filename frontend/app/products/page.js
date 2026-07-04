@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import api from "@/services/api";
 import ProductCard from "@/components/ProductCard";
+import ProductCardSkeleton from "@/components/skeletons/ProductCardSkeleton";
 
 export default function ProductsPage() {
   const [products, setProducts] = useState([]);
@@ -113,63 +114,28 @@ export default function ProductsPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-12">
-      {/* Header */}
       <div className="flex flex-col lg:flex-row justify-between items-center gap-6 mb-10">
         <div>
           <h1 className="text-5xl font-bold text-white">
             Our <span className="text-[#D4AF37]">Products</span>
           </h1>
 
-          <p className="text-gray-400 mt-2">
-            Browse our latest collection.
-          </p>
+          <p className="text-gray-400 mt-2">Browse our latest collection.</p>
         </div>
 
-        {/* Filters */}
         <div className="flex flex-col lg:flex-row gap-4 w-full lg:w-auto">
           <input
             type="text"
             placeholder="🔍 Search Products..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="
-              w-full
-              lg:w-72
-              px-5
-              py-3
-              rounded-xl
-              bg-[#0B1F33]
-              border
-              border-[#D4AF37]/20
-              text-white
-              placeholder:text-gray-500
-              outline-none
-              transition
-              focus:border-[#D4AF37]
-              focus:ring-2
-              focus:ring-[#D4AF37]/20
-            "
+            className="w-full lg:w-72 px-5 py-3 rounded-xl bg-[#0B1F33] border border-[#D4AF37]/20 text-white placeholder:text-gray-500 outline-none transition focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
           />
 
           <select
             value={category}
             onChange={(e) => setCategory(e.target.value)}
-            className="
-              px-5
-              py-3
-              rounded-xl
-              bg-[#0B1F33]
-              border
-              border-[#D4AF37]/20
-              text-white
-              outline-none
-              cursor-pointer
-              transition
-              hover:border-[#D4AF37]
-              focus:border-[#D4AF37]
-              focus:ring-2
-              focus:ring-[#D4AF37]/20
-            "
+            className="px-5 py-3 rounded-xl bg-[#0B1F33] border border-[#D4AF37]/20 text-white outline-none cursor-pointer transition hover:border-[#D4AF37] focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
           >
             <option value="All">All</option>
             <option value="Clothing">Clothing</option>
@@ -182,22 +148,7 @@ export default function ProductsPage() {
           <select
             value={featured}
             onChange={(e) => setFeatured(e.target.value)}
-            className="
-              px-5
-              py-3
-              rounded-xl
-              bg-[#0B1F33]
-              border
-              border-[#D4AF37]/20
-              text-white
-              outline-none
-              cursor-pointer
-              transition
-              hover:border-[#D4AF37]
-              focus:border-[#D4AF37]
-              focus:ring-2
-              focus:ring-[#D4AF37]/20
-            "
+            className="px-5 py-3 rounded-xl bg-[#0B1F33] border border-[#D4AF37]/20 text-white outline-none cursor-pointer transition hover:border-[#D4AF37] focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
           >
             <option value="All">All Products</option>
             <option value="true">Featured Only</option>
@@ -207,22 +158,7 @@ export default function ProductsPage() {
           <select
             value={sort}
             onChange={(e) => setSort(e.target.value)}
-            className="
-              px-5
-              py-3
-              rounded-xl
-              bg-[#0B1F33]
-              border
-              border-[#D4AF37]/20
-              text-white
-              outline-none
-              cursor-pointer
-              transition
-              hover:border-[#D4AF37]
-              focus:border-[#D4AF37]
-              focus:ring-2
-              focus:ring-[#D4AF37]/20
-            "
+            className="px-5 py-3 rounded-xl bg-[#0B1F33] border border-[#D4AF37]/20 text-white outline-none cursor-pointer transition hover:border-[#D4AF37] focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
           >
             <option value="newest">Newest First</option>
             <option value="oldest">Oldest First</option>
@@ -232,11 +168,8 @@ export default function ProductsPage() {
         </div>
       </div>
 
-      {/* Products */}
       {loading ? (
-        <div className="text-center text-gray-400 py-20">
-          Loading Products...
-        </div>
+        <ProductCardSkeleton />
       ) : products.length === 0 ? (
         <div className="text-center text-gray-400 py-20">
           No Products Found
