@@ -1,6 +1,19 @@
 const prisma = require("../config/db");
 
-const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const MONTH_NAMES = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
 
 exports.getDashboardAnalytics = async (req, res) => {
   try {
@@ -105,20 +118,31 @@ exports.getDashboardAnalytics = async (req, res) => {
     const currentMonthRevenue = orders
       .filter((order) => {
         const date = new Date(order.createdAt);
-        return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
+        return (
+          date.getMonth() === currentMonth &&
+          date.getFullYear() === currentYear
+        );
       })
       .reduce((sum, order) => sum + Number(order.total || 0), 0);
 
     const lastMonthRevenue = orders
       .filter((order) => {
         const date = new Date(order.createdAt);
-        return date.getMonth() === lastMonth && date.getFullYear() === lastMonthYear;
+        return (
+          date.getMonth() === lastMonth &&
+          date.getFullYear() === lastMonthYear
+        );
       })
       .reduce((sum, order) => sum + Number(order.total || 0), 0);
 
     const revenueGrowth =
       lastMonthRevenue > 0
-        ? Number((((currentMonthRevenue - lastMonthRevenue) / lastMonthRevenue) * 100).toFixed(1))
+        ? Number(
+            (
+              ((currentMonthRevenue - lastMonthRevenue) / lastMonthRevenue) *
+              100
+            ).toFixed(1)
+          )
         : currentMonthRevenue > 0
         ? 100
         : 0;
@@ -129,6 +153,7 @@ exports.getDashboardAnalytics = async (req, res) => {
       order.items?.forEach((item) => {
         const productId = item.productId || item.product?.id;
         const productName = item.product?.name || `Product #${productId}`;
+        const productImage = item.product?.image || "";
         const quantity = Number(item.quantity || 0);
         const revenue = Number(item.price || 0) * quantity;
 
@@ -138,6 +163,7 @@ exports.getDashboardAnalytics = async (req, res) => {
           productSalesMap[productId] = {
             productId,
             name: productName,
+            image: productImage,
             quantitySold: 0,
             revenue: 0,
           };

@@ -12,7 +12,20 @@ import {
   CartesianGrid,
 } from "recharts";
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const MONTHS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
 
 const formatCurrency = (value) => {
   return `Rs ${Number(value || 0).toLocaleString("en-PK")}`;
@@ -53,6 +66,7 @@ export default function AdminPage() {
   const fetchAnalytics = async () => {
     try {
       const res = await api.get("/analytics/dashboard");
+
       setAnalytics((prev) => ({
         ...prev,
         ...res.data,
@@ -84,7 +98,9 @@ export default function AdminPage() {
     }));
   }, [analytics.monthlyRevenue]);
 
-  const hasGraphData = monthlyRevenueData.some((item) => Number(item.revenue) > 0);
+  const hasGraphData = monthlyRevenueData.some(
+    (item) => Number(item.revenue) > 0
+  );
 
   const statusCards = [
     {
@@ -139,23 +155,59 @@ export default function AdminPage() {
       </div>
 
       <div className="grid lg:grid-cols-6 md:grid-cols-2 gap-5 mb-8">
-        <Card title="Total Revenue" value={formatCurrency(analytics.totalRevenue)} color="text-[#D4AF37]" />
+        <Card
+          title="Total Revenue"
+          value={formatCurrency(analytics.totalRevenue)}
+          color="text-[#D4AF37]"
+        />
 
         <Card
           title="Revenue Growth"
           value={`${Number(analytics.revenueGrowth || 0)}%`}
-          color={Number(analytics.revenueGrowth) >= 0 ? "text-green-400" : "text-red-400"}
+          color={
+            Number(analytics.revenueGrowth) >= 0
+              ? "text-green-400"
+              : "text-red-400"
+          }
         />
 
-        <Card title="Total Orders" value={analytics.totalOrders} color="text-white" />
-        <Card title="Total Users" value={analytics.totalUsers} color="text-green-400" />
-        <Card title="Products" value={analytics.totalProducts} color="text-blue-400" />
-        <Card title="Reviews" value={analytics.totalReviews} color="text-yellow-400" />
+        <Card
+          title="Total Orders"
+          value={analytics.totalOrders}
+          color="text-white"
+        />
+
+        <Card
+          title="Total Users"
+          value={analytics.totalUsers}
+          color="text-green-400"
+        />
+
+        <Card
+          title="Products"
+          value={analytics.totalProducts}
+          color="text-blue-400"
+        />
+
+        <Card
+          title="Reviews"
+          value={analytics.totalReviews}
+          color="text-yellow-400"
+        />
       </div>
 
       <div className="grid md:grid-cols-2 gap-5 mb-8">
-        <SmallCard title="Current Month Revenue" value={formatCurrency(analytics.currentMonthRevenue)} icon="📈" />
-        <SmallCard title="Last Month Revenue" value={formatCurrency(analytics.lastMonthRevenue)} icon="📉" />
+        <SmallCard
+          title="Current Month Revenue"
+          value={formatCurrency(analytics.currentMonthRevenue)}
+          icon="📈"
+        />
+
+        <SmallCard
+          title="Last Month Revenue"
+          value={formatCurrency(analytics.lastMonthRevenue)}
+          icon="📉"
+        />
       </div>
 
       <div className="bg-[#0B1F33] border border-[#D4AF37]/20 rounded-2xl p-6 mb-8 shadow-xl shadow-black/20">
@@ -165,8 +217,12 @@ export default function AdminPage() {
 
         <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
           {statusCards.map((card) => (
-            <div key={card.label} className="bg-[#071827] border border-[#D4AF37]/10 rounded-xl p-5">
+            <div
+              key={card.label}
+              className="bg-[#071827] border border-[#D4AF37]/10 rounded-xl p-5"
+            >
               <p className="text-gray-400 text-sm">{card.label}</p>
+
               <h3 className={`text-3xl font-bold mt-2 ${card.color}`}>
                 {card.value}
               </h3>
@@ -184,8 +240,13 @@ export default function AdminPage() {
               <ListCard key={order.id}>
                 <div className="flex justify-between gap-3">
                   <div>
-                    <p className="text-white font-semibold">{order.trackingId}</p>
-                    <p className="text-gray-400 text-sm mt-1">{order.customer}</p>
+                    <p className="text-white font-semibold">
+                      {order.trackingId}
+                    </p>
+
+                    <p className="text-gray-400 text-sm mt-1">
+                      {order.customer}
+                    </p>
                   </div>
 
                   <span className="text-[#D4AF37] font-bold">
@@ -194,7 +255,8 @@ export default function AdminPage() {
                 </div>
 
                 <p className="text-gray-500 text-xs mt-2">
-                  {new Date(order.createdAt).toLocaleDateString("en-PK")} • {order.status}
+                  {new Date(order.createdAt).toLocaleDateString("en-PK")} •{" "}
+                  {order.status}
                 </p>
               </ListCard>
             ))
@@ -210,6 +272,7 @@ export default function AdminPage() {
                 <div className="flex justify-between items-center gap-3">
                   <div>
                     <p className="text-white font-semibold">{user.username}</p>
+
                     <p className="text-gray-400 text-sm">{user.email}</p>
                   </div>
 
@@ -227,23 +290,32 @@ export default function AdminPage() {
         <Section title="Top Selling Products">
           {analytics.topSellingProducts?.length === 0 ? (
             <p className="text-gray-400">
-              No product sales yet. Place an order with products and this section will show data.
+              No product sales yet. Place an order with products and this
+              section will show data.
             </p>
           ) : (
             analytics.topSellingProducts?.map((product, index) => (
               <ListCard key={product.productId || index}>
-                <div className="flex justify-between items-center gap-3">
-                  <div>
-                    <p className="text-white font-semibold">
-                      #{index + 1} {product.name}
-                    </p>
+                <div className="flex justify-between items-center gap-4">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <img
+                      src={product.image || "/placeholder-product.png"}
+                      alt={product.name}
+                      className="w-14 h-14 rounded-xl object-cover border border-[#D4AF37]/20 shrink-0"
+                    />
 
-                    <p className="text-gray-400 text-sm">
-                      Sold Quantity: {product.quantitySold}
-                    </p>
+                    <div className="min-w-0">
+                      <p className="text-white font-semibold truncate">
+                        #{index + 1} {product.name}
+                      </p>
+
+                      <p className="text-gray-400 text-sm">
+                        Sold Quantity: {product.quantitySold}
+                      </p>
+                    </div>
                   </div>
 
-                  <span className="text-[#D4AF37] font-bold">
+                  <span className="text-[#D4AF37] font-bold whitespace-nowrap">
                     {formatCurrency(product.revenue)}
                   </span>
                 </div>
@@ -260,7 +332,10 @@ export default function AdminPage() {
               <ListCard key={customer.email || index}>
                 <div className="flex justify-between items-center gap-3">
                   <div>
-                    <p className="text-white font-semibold">👑 {customer.customer}</p>
+                    <p className="text-white font-semibold">
+                      👑 {customer.customer}
+                    </p>
+
                     <p className="text-gray-400 text-sm">
                       {customer.email} • {customer.totalOrders} orders
                     </p>
@@ -285,8 +360,14 @@ export default function AdminPage() {
               <ListCard key={payment.id}>
                 <div className="flex justify-between items-start gap-3">
                   <div>
-                    <p className="text-white font-semibold">{payment.trackingId}</p>
-                    <p className="text-gray-400 text-sm">{payment.customer}</p>
+                    <p className="text-white font-semibold">
+                      {payment.trackingId}
+                    </p>
+
+                    <p className="text-gray-400 text-sm">
+                      {payment.customer}
+                    </p>
+
                     <p className="text-gray-500 text-xs mt-2">
                       {new Date(payment.createdAt).toLocaleDateString("en-PK")}
                     </p>
@@ -417,6 +498,7 @@ export default function AdminPage() {
             <div className="h-full flex items-center justify-center text-center">
               <div>
                 <p className="text-5xl mb-3">📈</p>
+
                 <p className="text-gray-400">
                   No revenue data yet. Complete an order to show the graph.
                 </p>
@@ -449,6 +531,7 @@ function SmallCard({ title, value, icon }) {
 
         <div>
           <p className="text-gray-400 text-sm">{title}</p>
+
           <h3 className="text-xl font-bold text-[#D4AF37] mt-1">{value}</h3>
         </div>
       </div>
@@ -460,6 +543,7 @@ function Section({ title, children }) {
   return (
     <div className="bg-[#0B1F33] border border-[#D4AF37]/20 rounded-2xl p-6 shadow-xl shadow-black/20">
       <h2 className="text-xl font-bold text-white mb-5">{title}</h2>
+
       <div className="space-y-4">{children}</div>
     </div>
   );

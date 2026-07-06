@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { showSuccessToast, showErrorToast } from "@/utils/toast";
+import { generateInvoicePDF } from "@/utils/invoiceGenerator";
 import api from "@/services/api";
 
 export default function AdminOrdersPage() {
@@ -11,7 +12,14 @@ export default function AdminOrdersPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
 
-  const statuses = ["All", "Pending", "Processing", "Shipped", "Delivered", "Cancelled"];
+  const statuses = [
+    "All",
+    "Pending",
+    "Processing",
+    "Shipped",
+    "Delivered",
+    "Cancelled",
+  ];
 
   const fetchOrders = async () => {
     try {
@@ -44,6 +52,10 @@ export default function AdminOrdersPage() {
       console.log(error);
       showErrorToast("Failed to update status");
     }
+  };
+
+  const handleDownloadInvoice = (order) => {
+    generateInvoicePDF(order, "admin");
   };
 
   const getStatusColor = (status) => {
@@ -84,7 +96,9 @@ export default function AdminOrdersPage() {
     0
   );
 
-  const pendingOrders = orders.filter((order) => order.status === "Pending").length;
+  const pendingOrders = orders.filter(
+    (order) => order.status === "Pending"
+  ).length;
 
   const deliveredOrders = orders.filter(
     (order) => order.status === "Delivered"
@@ -113,7 +127,9 @@ export default function AdminOrdersPage() {
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-8">
         <div className="bg-slate-900 border border-slate-700 rounded-2xl p-5">
           <p className="text-gray-400 text-sm">Total Orders</p>
-          <h2 className="text-2xl font-bold text-white mt-1">{orders.length}</h2>
+          <h2 className="text-2xl font-bold text-white mt-1">
+            {orders.length}
+          </h2>
         </div>
 
         <div className="bg-slate-900 border border-slate-700 rounded-2xl p-5">
@@ -172,7 +188,7 @@ export default function AdminOrdersPage() {
         </div>
       ) : (
         <div className="overflow-x-auto bg-slate-900 rounded-2xl border border-slate-700">
-          <table className="w-full min-w-[900px]">
+          <table className="w-full min-w-[1050px]">
             <thead>
               <tr className="border-b border-slate-700 text-white">
                 <th className="p-4 text-left">Tracking ID</th>
@@ -182,6 +198,7 @@ export default function AdminOrdersPage() {
                 <th className="p-4 text-left">Total</th>
                 <th className="p-4 text-left">Status</th>
                 <th className="p-4 text-left">Update Status</th>
+                <th className="p-4 text-left">Invoice</th>
               </tr>
             </thead>
 
@@ -218,7 +235,9 @@ export default function AdminOrdersPage() {
                   <td className="p-4">
                     <select
                       value={order.status}
-                      onChange={(e) => updateStatus(order.id, e.target.value)}
+                      onChange={(e) =>
+                        updateStatus(order.id, e.target.value)
+                      }
                       className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white outline-none focus:border-[#D4AF37]"
                     >
                       <option value="Pending">Pending</option>
@@ -227,6 +246,15 @@ export default function AdminOrdersPage() {
                       <option value="Delivered">Delivered</option>
                       <option value="Cancelled">Cancelled</option>
                     </select>
+                  </td>
+
+                  <td className="p-4">
+                    <button
+                      onClick={() => handleDownloadInvoice(order)}
+                      className="bg-[#D4AF37] text-black px-4 py-2 rounded-lg font-semibold hover:bg-yellow-400 transition whitespace-nowrap"
+                    >
+                      📄 Invoice
+                    </button>
                   </td>
                 </tr>
               ))}
