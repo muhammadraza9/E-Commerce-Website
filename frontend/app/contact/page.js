@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import emailjs from "@emailjs/browser";
+import ContactSkeleton from "@/components/skeletons/ContactSkeleton";
 import { showSuccessToast, showErrorToast } from "@/utils/toast";
 
 const EMAILJS_SERVICE_ID = "service_si7x6yg";
@@ -16,6 +17,15 @@ export default function Contact() {
   });
 
   const [status, setStatus] = useState("idle");
+  const [pageLoading, setPageLoading] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setPageLoading(false);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleChange = (e) => {
     setFormData((prev) => ({
@@ -51,24 +61,24 @@ export default function Contact() {
       );
     } catch (err) {
       console.error("EmailJS Error:", err);
-
-      showErrorToast(
-        err?.text || "Something went wrong. Please try again."
-      );
+      showErrorToast(err?.text || "Something went wrong. Please try again.");
     } finally {
       setStatus("idle");
     }
   };
 
+  if (pageLoading) {
+    return <ContactSkeleton />;
+  }
+
   return (
     <div className="min-h-screen">
-      {/* Hero */}
       <section className="relative px-6 py-24 flex items-center overflow-hidden min-h-[700px]">
         <div
           className="absolute inset-0"
           style={{
             backgroundImage:
-                        "url('https://images.openai.com/static-rsc-4/P4BFgu2jYDHTvCx61eKvAcJSEceLmurkyHBmhON8Zwxke-1cpCNY4udUf_UXxXreaf6gxQljcml0gUXgIsXrCLlmxgVh5_a2au9hYQTz6AgVAU-9BWnzEuw469QU5J0DweHH0T44GfHX4Fkb-nagOE9x4oRdY8sVnmZNUM-qbaqRBhI9Gs6UgEWjq1TJyP_n?purpose=inline')",
+              "url('https://images.openai.com/static-rsc-4/P4BFgu2jYDHTvCx61eKvAcJSEceLmurkyHBmhON8Zwxke-1cpCNY4udUf_UXxXreaf6gxQljcml0gUXgIsXrCLlmxgVh5_a2au9hYQTz6AgVAU-9BWnzEuw469QU5J0DweHH0T44GfHX4Fkb-nagOE9x4oRdY8sVnmZNUM-qbaqRBhI9Gs6UgEWjq1TJyP_n?purpose=inline')",
             backgroundSize: "cover",
             backgroundPosition: "center",
             filter: "brightness(1)",
@@ -87,15 +97,16 @@ export default function Contact() {
           </h1>
 
           <p className="mt-4 text-gray-200 max-w-xl">
-            Have a question? We'd love to hear from you. <span className="text-[#D4AF37]">Send us a message and we'll </span> 
-             respond as soon as possible.
+            Have a question? We'd love to hear from you.{" "}
+            <span className="text-[#D4AF37]">
+              Send us a message and we'll
+            </span>{" "}
+            respond as soon as possible.
           </p>
         </div>
       </section>
 
-      {/* Main Section */}
       <section className="max-w-6xl mx-auto px-6 py-20 grid grid-cols-1 lg:grid-cols-2 gap-16">
-        {/* Contact Form */}
         <div>
           <h2 className="text-3xl font-bold text-[#D4AF37] mb-8">
             Send Us a Message
@@ -142,7 +153,6 @@ export default function Contact() {
           </form>
         </div>
 
-        {/* Store Information */}
         <div className="flex flex-col justify-center gap-8">
           <h2 className="text-3xl font-bold text-[#D4AF37]">
             Store Information
@@ -189,9 +199,7 @@ export default function Contact() {
               <p className="text-gray-400 mt-1">
                 Monday – Saturday: 10:00 AM – 9:00 PM
               </p>
-              <p className="text-gray-400">
-                Sunday: 12:00 PM – 6:00 PM
-              </p>
+              <p className="text-gray-400">Sunday: 12:00 PM – 6:00 PM</p>
             </div>
           </div>
 

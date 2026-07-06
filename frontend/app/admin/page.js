@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import api from "@/services/api";
+import DashboardSkeleton from "@/components/skeletons/DashboardSkeleton";
 import {
   LineChart,
   Line,
@@ -131,11 +132,7 @@ export default function AdminPage() {
   ];
 
   if (loading) {
-    return (
-      <div className="px-6 py-20 text-center text-white">
-        Loading Dashboard...
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   return (

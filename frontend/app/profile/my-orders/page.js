@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import api from "@/services/api";
 import Link from "next/link";
+import MyOrdersSkeleton from "@/components/skeletons/MyOrdersSkeleton";
 
 export default function MyOrdersPage() {
   const router = useRouter();
@@ -108,7 +109,7 @@ export default function MyOrdersPage() {
   ).length;
 
   if (loading) {
-    return <div className="text-center py-20 text-white">Loading...</div>;
+    return <MyOrdersSkeleton />;
   }
 
   if (!user) {

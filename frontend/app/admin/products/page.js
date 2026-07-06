@@ -7,6 +7,7 @@ import {
   showSuccessToast,
   showErrorToast,
 } from "@/utils/toast";
+import AdminProductsSkeleton from "@/components/skeletons/AdminProductsSkeleton";
 
 export default function AdminProductsPage() {
   const [products, setProducts] = useState([]);
@@ -44,10 +45,10 @@ export default function AdminProductsPage() {
 
       const res = await api.get(`/products?${params.toString()}`);
 
-      setProducts(res.data.products);
-      setCurrentPage(res.data.currentPage);
-      setTotalPages(res.data.totalPages);
-      setTotalProducts(res.data.totalProducts);
+      setProducts(res.data.products || []);
+      setCurrentPage(res.data.currentPage || 1);
+      setTotalPages(res.data.totalPages || 1);
+      setTotalProducts(res.data.totalProducts || 0);
     } catch (error) {
       console.log(error);
       showErrorToast("Failed to load products");
@@ -111,75 +112,54 @@ export default function AdminProductsPage() {
   const startProduct =
     totalProducts === 0 ? 0 : (currentPage - 1) * limit + 1;
 
-  const endProduct = Math.min(
-    currentPage * limit,
-    totalProducts
-  );
+  const endProduct = Math.min(currentPage * limit, totalProducts);
+
+  if (loading) {
+    return <AdminProductsSkeleton />;
+  }
 
   return (
     <div className="max-w-7xl mx-auto">
-
-      {/* Header */}
-
       <div className="mb-10">
-
         <h1 className="text-4xl font-bold text-white">
-          Admin{" "}
-          <span className="text-[#D4AF37]">
-            Products
-          </span>
+          Admin <span className="text-[#D4AF37]">Products</span>
         </h1>
 
         <p className="text-gray-400 mt-2">
           Total Products : {totalProducts}
         </p>
-
       </div>
 
-      {/* Search */}
-
       <div className="flex flex-col md:flex-row gap-4 mb-10">
-
         <input
           type="text"
           placeholder="Search products..."
           value={search}
-          onChange={(e) =>
-            setSearch(e.target.value)
-          }
+          onChange={(e) => setSearch(e.target.value)}
           className="flex-1 bg-[#0d1117] border border-slate-700 rounded-xl p-4 text-white outline-none focus:border-[#D4AF37] transition"
         />
 
         <Link
           href="/admin/products/add"
-          className="md:w-56 flex items-center justify-center bg-[#D4AF37] hover:bg-[#c9a227] rounded-xl text-white font-semibold transition"
+          className="md:w-56 flex items-center justify-center bg-[#D4AF37] hover:bg-[#c9a227] rounded-xl text-white font-semibold transition py-4"
         >
           + Add Product
         </Link>
-
       </div>
 
-      {/* Loading */}
-
-      {loading ? (
-        <div className="text-center py-20 text-gray-400">
-          Loading Products...
+      {products.length === 0 ? (
+        <div className="text-center text-gray-400 py-20">
+          No products found.
         </div>
       ) : (
         <>
-          {/* Products */}
-
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-
             {products.map((product) => (
-
               <div
                 key={product.id}
                 className="group bg-[#0d1117] border border-slate-800 rounded-2xl overflow-hidden hover:border-[#D4AF37] transition"
               >
-
                 <div className="relative aspect-[4/5] overflow-hidden">
-
                   <img
                     src={product.image}
                     alt={product.name}
@@ -195,11 +175,9 @@ export default function AdminProductsPage() {
                       ⭐ Featured
                     </span>
                   )}
-
                 </div>
 
                 <div className="p-5">
-
                   <h2 className="text-white text-lg font-semibold">
                     {product.name}
                   </h2>
@@ -213,7 +191,6 @@ export default function AdminProductsPage() {
                   </p>
 
                   <div className="mt-3">
-
                     <span
                       className={`px-3 py-1 rounded-full text-xs font-semibold ${
                         product.featured
@@ -225,11 +202,9 @@ export default function AdminProductsPage() {
                         ? "Featured Product"
                         : "Normal Product"}
                     </span>
-
                   </div>
 
                   <div className="flex gap-3 mt-6">
-
                     <Link
                       href={`/admin/products/edit/${product.id}`}
                       className="flex-1 text-center bg-blue-600 hover:bg-blue-700 py-2 rounded-lg text-white transition"
@@ -238,66 +213,38 @@ export default function AdminProductsPage() {
                     </Link>
 
                     <button
-                      onClick={() =>
-                        handleDelete(product.id)
-                      }
+                      onClick={() => handleDelete(product.id)}
                       className="flex-1 bg-red-600 hover:bg-red-700 py-2 rounded-lg text-white cursor-pointer transition"
                     >
                       Delete
                     </button>
-
                   </div>
-
                 </div>
-
               </div>
-
             ))}
-
           </div>
 
-          {/* No Products */}
-
-          {products.length === 0 && (
-            <div className="text-center text-gray-400 py-20">
-              No products found.
-            </div>
-          )}
-
-          {/* Pagination */}
-
           {totalPages > 1 && (
-
             <div className="mt-14">
-
               <div className="text-center text-gray-400 mb-6">
-
                 Showing{" "}
                 <span className="text-[#D4AF37] font-semibold">
                   {startProduct}
-                </span>
-
-                {" "}to{" "}
-
+                </span>{" "}
+                to{" "}
                 <span className="text-[#D4AF37] font-semibold">
                   {endProduct}
-                </span>
-
-                {" "}of{" "}
-
+                </span>{" "}
+                of{" "}
                 <span className="text-[#D4AF37] font-semibold">
                   {totalProducts}
                 </span>{" "}
                 Products
-
               </div>
 
               <div className="flex justify-center gap-2 flex-wrap">
-
                 <button
-                  onClick={() =>
-                    handlePageChange(currentPage - 1)
-                  }
+                  onClick={() => handlePageChange(currentPage - 1)}
                   disabled={currentPage === 1}
                   className="px-4 py-2 rounded-lg border border-slate-700 bg-[#0d1117] text-white disabled:opacity-40 hover:border-[#D4AF37] transition cursor-pointer"
                 >
@@ -307,19 +254,14 @@ export default function AdminProductsPage() {
                 {renderPages()}
 
                 <button
-                  onClick={() =>
-                    handlePageChange(currentPage + 1)
-                  }
+                  onClick={() => handlePageChange(currentPage + 1)}
                   disabled={currentPage === totalPages}
                   className="px-4 py-2 rounded-lg border border-slate-700 bg-[#0d1117] text-white disabled:opacity-40 hover:border-[#D4AF37] transition cursor-pointer"
                 >
                   Next
                 </button>
-
               </div>
-
             </div>
-
           )}
         </>
       )}

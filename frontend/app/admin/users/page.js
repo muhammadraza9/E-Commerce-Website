@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import api from "@/services/api";
 import { showSuccessToast, showErrorToast } from "@/utils/toast";
+import AdminUsersSkeleton from "@/components/skeletons/AdminUsersSkeleton";
 
 export default function AdminUsersPage() {
   const [users, setUsers] = useState([]);
@@ -79,7 +80,7 @@ export default function AdminUsersPage() {
   const totalCustomers = users.filter((user) => user.role === "USER").length;
 
   if (loading) {
-    return <div className="text-center py-20 text-white">Loading Users...</div>;
+    return <AdminUsersSkeleton />;
   }
 
   return (

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import api from "@/services/api";
+import EditProductSkeleton from "@/components/skeletons/EditProductSkeleton";
 import {
   showSuccessToast,
   showErrorToast,
@@ -14,6 +15,7 @@ export default function EditProductPage() {
   const fileInputRef = useRef(null);
 
   const [loading, setLoading] = useState(false);
+  const [pageLoading, setPageLoading] = useState(true);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -34,21 +36,25 @@ export default function EditProductPage() {
 
   const fetchProduct = async () => {
     try {
+      setPageLoading(true);
+
       const res = await api.get(`/products/${params.id}`);
 
       setFormData({
-        name: res.data.name,
-        description: res.data.description,
-        image: res.data.image,
-        category: res.data.category,
-        price: res.data.price,
-        featured: res.data.featured,
+        name: res.data.name || "",
+        description: res.data.description || "",
+        image: res.data.image || "",
+        category: res.data.category || "Clothing",
+        price: res.data.price || "",
+        featured: res.data.featured || false,
       });
 
-      setImagePreview(res.data.image);
+      setImagePreview(res.data.image || "");
     } catch (error) {
       console.log(error);
       showErrorToast("Failed to load product");
+    } finally {
+      setPageLoading(false);
     }
   };
 
@@ -57,10 +63,7 @@ export default function EditProductPage() {
 
     setFormData((prev) => ({
       ...prev,
-      [name]:
-        type === "checkbox"
-          ? checked
-          : value,
+      [name]: type === "checkbox" ? checked : value,
     }));
   };
 
@@ -95,11 +98,35 @@ export default function EditProductPage() {
       return showErrorToast("Please select an image");
     }
 
-    setImageFile(file);
+    if (file.size > 5 * 1024 * 1024) {
+      return showErrorToast("Image must be less than 5MB");
+    }
 
-    setImagePreview(
-      URL.createObjectURL(file)
-    );
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+
+    const file = e.dataTransfer.files[0];
+
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      return showErrorToast("Please select an image");
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      return showErrorToast("Image must be less than 5MB");
+    }
+
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
   };
 
   const uploadToCloudinary = async (file) => {
@@ -109,8 +136,7 @@ export default function EditProductPage() {
 
     data.append(
       "upload_preset",
-      process.env
-        .NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET
+      process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET
     );
 
     const res = await fetch(
@@ -135,40 +161,32 @@ export default function EditProductPage() {
       let image = formData.image;
 
       if (imageMode === "file" && imageFile) {
-        image =
-          await uploadToCloudinary(
-            imageFile
-          );
+        image = await uploadToCloudinary(imageFile);
       }
 
-      await api.put(
-        `/products/${params.id}`,
-        {
-          ...formData,
-          image,
-          price: Number(formData.price),
-        }
-      );
+      await api.put(`/products/${params.id}`, {
+        ...formData,
+        image,
+        price: Number(formData.price),
+      });
 
-      showSuccessToast(
-        "Product Updated Successfully"
-      );
+      showSuccessToast("Product Updated Successfully");
 
       router.push("/admin/products");
     } catch (error) {
       console.log(error);
-
-      showErrorToast(
-        "Failed to update product"
-      );
+      showErrorToast("Failed to update product");
     } finally {
       setLoading(false);
     }
   };
 
+  if (pageLoading) {
+    return <EditProductSkeleton />;
+  }
+
   return (
     <div className="max-w-3xl mx-auto px-6 py-12">
-
       <h1 className="text-4xl font-bold text-white mb-8">
         Edit Product
       </h1>
@@ -177,9 +195,7 @@ export default function EditProductPage() {
         onSubmit={handleSubmit}
         className="bg-slate-900 border border-slate-700 rounded-2xl p-6 space-y-5"
       >
-
         <div>
-
           <label className="block text-white mb-2">
             Product Name
           </label>
@@ -189,14 +205,12 @@ export default function EditProductPage() {
             name="name"
             value={formData.name}
             onChange={handleChange}
-            className="w-full bg-slate-800 border border-slate-600 text-white p-3 rounded-lg"
+            className="w-full bg-slate-800 border border-slate-600 text-white p-3 rounded-lg outline-none focus:border-[#D4AF37]"
             required
           />
-
         </div>
 
         <div>
-
           <label className="block text-white mb-2">
             Description
           </label>
@@ -206,28 +220,23 @@ export default function EditProductPage() {
             name="description"
             value={formData.description}
             onChange={handleChange}
-            className="w-full bg-slate-800 border border-slate-600 text-white p-3 rounded-lg"
+            className="w-full bg-slate-800 border border-slate-600 text-white p-3 rounded-lg outline-none resize-none focus:border-[#D4AF37]"
             required
           />
-
         </div>
 
         <div>
-
           <label className="block text-white mb-2">
             Product Image
           </label>
 
           <div className="flex gap-2 mb-4">
-
             <button
               type="button"
-              onClick={() =>
-                setImageMode("url")
-              }
-              className={`flex-1 py-2 rounded-lg ${
+              onClick={() => handleImageModeSwitch("url")}
+              className={`flex-1 py-2 rounded-lg transition ${
                 imageMode === "url"
-                  ? "bg-green-600 text-white"
+                  ? "bg-[#D4AF37] text-black font-semibold"
                   : "bg-slate-700 text-slate-300"
               }`}
             >
@@ -236,40 +245,38 @@ export default function EditProductPage() {
 
             <button
               type="button"
-              onClick={() =>
-                handleImageModeSwitch(
-                  "file"
-                )
-              }
-              className={`flex-1 py-2 rounded-lg ${
+              onClick={() => handleImageModeSwitch("file")}
+              className={`flex-1 py-2 rounded-lg transition ${
                 imageMode === "file"
-                  ? "bg-green-600 text-white"
+                  ? "bg-[#D4AF37] text-black font-semibold"
                   : "bg-slate-700 text-slate-300"
               }`}
             >
               Upload
             </button>
-
           </div>
 
           {imageMode === "url" ? (
             <input
               type="text"
               value={formData.image}
-              onChange={
-                handleUrlChange
-              }
-              className="w-full bg-slate-800 border border-slate-600 text-white p-3 rounded-lg"
+              onChange={handleUrlChange}
+              placeholder="Paste image URL..."
+              className="w-full bg-slate-800 border border-slate-600 text-white p-3 rounded-lg outline-none focus:border-[#D4AF37]"
             />
           ) : (
             <>
               <div
-                onClick={() =>
-                  fileInputRef.current.click()
-                }
-                className="border-2 border-dashed border-slate-600 rounded-lg p-8 text-center cursor-pointer hover:border-green-500"
+                onDrop={handleDrop}
+                onDragOver={handleDragOver}
+                onClick={() => fileInputRef.current.click()}
+                className="border-2 border-dashed border-slate-600 rounded-xl p-8 text-center cursor-pointer hover:border-[#D4AF37] transition"
               >
-                Click to Upload
+                <p className="text-white font-semibold">Upload Image</p>
+
+                <p className="text-gray-400 text-sm mt-2">
+                  Drag & drop image here or click to browse
+                </p>
               </div>
 
               <input
@@ -277,24 +284,21 @@ export default function EditProductPage() {
                 type="file"
                 accept="image/*"
                 hidden
-                onChange={
-                  handleFileChange
-                }
+                onChange={handleFileChange}
               />
             </>
           )}
-
         </div>
 
         {imagePreview && (
           <img
             src={imagePreview}
-            className="w-52 rounded-lg border border-slate-700"
+            alt="Preview"
+            className="w-52 h-52 object-cover rounded-lg border border-slate-700"
           />
         )}
 
         <div>
-
           <label className="block text-white mb-2">
             Category
           </label>
@@ -303,7 +307,7 @@ export default function EditProductPage() {
             name="category"
             value={formData.category}
             onChange={handleChange}
-            className="w-full bg-slate-800 border border-slate-600 text-white p-3 rounded-lg"
+            className="w-full bg-slate-800 border border-slate-600 text-white p-3 rounded-lg outline-none focus:border-[#D4AF37]"
           >
             <option>Clothing</option>
             <option>Shoes</option>
@@ -311,11 +315,9 @@ export default function EditProductPage() {
             <option>Hoodies</option>
             <option>T-Shirts</option>
           </select>
-
         </div>
 
         <div>
-
           <label className="block text-white mb-2">
             Price
           </label>
@@ -325,14 +327,12 @@ export default function EditProductPage() {
             name="price"
             value={formData.price}
             onChange={handleChange}
-            className="w-full bg-slate-800 border border-slate-600 text-white p-3 rounded-lg"
+            className="w-full bg-slate-800 border border-slate-600 text-white p-3 rounded-lg outline-none focus:border-[#D4AF37]"
             required
           />
-
         </div>
 
         <div className="flex items-center gap-3 bg-slate-800 border border-slate-700 rounded-lg p-4">
-
           <input
             type="checkbox"
             id="featured"
@@ -348,20 +348,15 @@ export default function EditProductPage() {
           >
             ⭐ Featured Product
           </label>
-
         </div>
 
         <button
           disabled={loading}
-          className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-semibold"
+          className="w-full bg-[#D4AF37] hover:bg-yellow-400 text-black py-3 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition"
         >
-          {loading
-            ? "Updating..."
-            : "Update Product"}
+          {loading ? "Updating..." : "Update Product"}
         </button>
-
       </form>
-
     </div>
   );
 }

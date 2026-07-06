@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import api from "@/services/api";
 import Link from "next/link";
+import ProfileSkeleton from "@/components/skeletons/ProfileSkeleton";
+import { showSuccessToast, showErrorToast } from "@/utils/toast";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -19,20 +21,26 @@ export default function ProfilePage() {
   const [newPassword, setNewPassword] = useState("");
 
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
+  const [pageLoading, setPageLoading] = useState(true);
 
   useEffect(() => {
-    const storedUser = localStorage.getItem("user");
+    const timer = setTimeout(() => {
+      const storedUser = localStorage.getItem("user");
 
-    if (!storedUser) {
-      router.push("/signin");
-      return;
-    }
+      if (!storedUser) {
+        router.push("/signin");
+        return;
+      }
 
-    const userData = JSON.parse(storedUser);
-    setUser(userData);
-    setUsername(userData.username || userData.name || "");
-    fetchOrders(userData.email);
+      const userData = JSON.parse(storedUser);
+
+      setUser(userData);
+      setUsername(userData.username || userData.name || "");
+      fetchOrders(userData.email);
+      setPageLoading(false);
+    }, 500);
+
+    return () => clearTimeout(timer);
   }, [router]);
 
   const fetchOrders = async (email) => {
@@ -47,11 +55,17 @@ export default function ProfilePage() {
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
 
+    if (!username.trim()) {
+      showErrorToast("Username is required");
+      return;
+    }
+
     try {
       setLoading(true);
-      setMessage("");
 
-      const res = await api.put("/auth/profile", { username });
+      const res = await api.put("/auth/profile", {
+        username: username.trim(),
+      });
 
       const updatedUser = res.data.user;
 
@@ -60,9 +74,11 @@ export default function ProfilePage() {
 
       setUser(updatedUser);
       setEditOpen(false);
-      setMessage("Profile updated successfully");
+
+      showSuccessToast("Profile updated successfully");
     } catch (error) {
-      setMessage(error?.response?.data?.message || "Profile update failed");
+      console.log(error);
+      showErrorToast(error?.response?.data?.message || "Profile update failed");
     } finally {
       setLoading(false);
     }
@@ -71,21 +87,37 @@ export default function ProfilePage() {
   const handleChangePassword = async (e) => {
     e.preventDefault();
 
+    if (!oldPassword.trim() || !newPassword.trim()) {
+      showErrorToast("Please fill both password fields");
+      return;
+    }
+
+    if (newPassword.length < 4 || newPassword.length > 9) {
+      showErrorToast("New password must be 4 to 9 characters");
+      return;
+    }
+
+    if (oldPassword === newPassword) {
+      showErrorToast("New password must be different from old password");
+      return;
+    }
+
     try {
       setLoading(true);
-      setMessage("");
 
       await api.put("/auth/change-password", {
         oldPassword,
         newPassword,
       });
 
+      showSuccessToast("Password changed successfully");
+
       setOldPassword("");
       setNewPassword("");
       setPasswordOpen(false);
-      setMessage("Password changed successfully");
     } catch (error) {
-      setMessage(error?.response?.data?.message || "Password change failed");
+      console.log(error);
+      showErrorToast(error?.response?.data?.message || "Password change failed");
     } finally {
       setLoading(false);
     }
@@ -109,13 +141,15 @@ export default function ProfilePage() {
         return "bg-purple-500";
       case "Delivered":
         return "bg-green-500";
+      case "Cancelled":
+        return "bg-red-600";
       default:
         return "bg-gray-500";
     }
   };
 
-  if (!user) {
-    return <div className="text-center py-20 text-lg">Loading...</div>;
+  if (pageLoading || !user) {
+    return <ProfileSkeleton />;
   }
 
   const latestTrackingId = orders.length > 0 ? orders[0]?.trackingId : "";
@@ -123,12 +157,6 @@ export default function ProfilePage() {
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-12">
-      {message && (
-        <div className="mb-5 border border-[#D4AF37]/40 bg-[#D4AF37]/10 text-[#D4AF37] rounded-xl px-5 py-3 text-sm">
-          {message}
-        </div>
-      )}
-
       <div className="border border-slate-700 rounded-2xl p-8 mb-6">
         <div className="flex flex-col items-center gap-4 text-center">
           <div
@@ -187,18 +215,20 @@ export default function ProfilePage() {
           <h2 className="text-xl font-bold mb-4">Edit Profile</h2>
 
           <label className="block text-sm text-gray-400 mb-2">Username</label>
+
           <input
             type="text"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             className="w-full bg-transparent border border-slate-700 rounded-lg px-4 py-3 outline-none focus:border-[#D4AF37]"
             placeholder="Enter username"
+            required
           />
 
           <button
             type="submit"
             disabled={loading}
-            className="mt-4 bg-[#D4AF37] text-[#001F14] px-6 py-3 rounded-lg font-semibold disabled:opacity-50"
+            className="mt-4 bg-[#D4AF37] text-[#001F14] px-6 py-3 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? "Updating..." : "Update Profile"}
           </button>
@@ -215,31 +245,41 @@ export default function ProfilePage() {
           <label className="block text-sm text-gray-400 mb-2">
             Old Password
           </label>
+
           <input
             type="password"
             value={oldPassword}
             onChange={(e) => setOldPassword(e.target.value)}
             className="w-full bg-transparent border border-slate-700 rounded-lg px-4 py-3 outline-none focus:border-[#D4AF37] mb-4"
             placeholder="Enter old password"
+            required
           />
 
           <label className="block text-sm text-gray-400 mb-2">
             New Password
           </label>
+
           <input
             type="password"
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
             className="w-full bg-transparent border border-slate-700 rounded-lg px-4 py-3 outline-none focus:border-[#D4AF37]"
             placeholder="Enter new password"
+            required
+            minLength={4}
+            maxLength={9}
           />
+
+          <p className="text-gray-500 text-xs mt-2">
+            Password must be 4 to 9 characters.
+          </p>
 
           <button
             type="submit"
             disabled={loading}
-            className="mt-4 bg-[#D4AF37] text-[#001F14] px-6 py-3 rounded-lg font-semibold disabled:opacity-50"
+            className="mt-4 bg-[#D4AF37] text-[#001F14] px-6 py-3 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? "Updating..." : "Change Password"}
+            {loading ? "Changing..." : "Change Password"}
           </button>
         </form>
       )}
@@ -250,8 +290,10 @@ export default function ProfilePage() {
           className="border border-slate-700 rounded-2xl p-5 flex items-center gap-3 hover:border-[#D4AF37] hover:bg-[#D4AF37]/10 hover:scale-105 transition-all duration-300"
         >
           <span className="text-2xl">📦</span>
+
           <div>
             <p className="font-semibold text-sm">My Orders</p>
+
             <p className="text-gray-400 text-xs mt-0.5">
               Total Orders: {orders.length}
             </p>
@@ -267,8 +309,10 @@ export default function ProfilePage() {
           className="border border-slate-700 rounded-2xl p-5 flex items-center gap-3 hover:border-[#D4AF37] hover:bg-[#D4AF37]/10 hover:scale-105 transition-all duration-300"
         >
           <span className="text-2xl">🚚</span>
+
           <div>
             <p className="font-semibold text-sm">Track Order</p>
+
             <p className="text-gray-400 text-xs mt-0.5">
               Track your delivery
             </p>
@@ -306,8 +350,9 @@ export default function ProfilePage() {
                 <div className="flex justify-between items-center">
                   <div>
                     <p className="font-semibold">{order.trackingId}</p>
+
                     <p className="text-gray-400 text-sm mt-1">
-                      {new Date(order.createdAt).toLocaleDateString()}
+                      {new Date(order.createdAt).toLocaleDateString("en-PK")}
                     </p>
                   </div>
 

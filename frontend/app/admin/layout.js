@@ -4,12 +4,11 @@ import Link from "next/link";
 
 export default function AdminLayout({ children }) {
   return (
-    <div className="min-h-screen flex bg-slate-950">
-      
+    <div className="min-h-screen flex bg-slate-950 overflow-hidden">
       {/* Sidebar */}
-      <div className="w-64 bg-slate-900 border-r border-slate-800 p-6">
+      <aside className="w-64 min-w-64 shrink-0 bg-slate-900 border-r border-slate-800 p-6 min-h-screen">
         <h1 className="text-2xl font-bold text-white mb-8">
-          Admin <span className="text-[#D4AF37]"> Panel </span>
+          Admin <span className="text-[#D4AF37]">Panel</span>
         </h1>
 
         <div className="flex flex-col gap-3">
@@ -48,12 +47,14 @@ export default function AdminLayout({ children }) {
             Back To Store
           </Link>
         </div>
-      </div>
+      </aside>
 
       {/* Content */}
-      <div className="flex-1 p-8">
-        {children}
-      </div>
+      <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-8">
+        <div className="w-full max-w-full min-w-0">
+          {children}
+        </div>
+      </main>
     </div>
   );
 }

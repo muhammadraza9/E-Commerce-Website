@@ -6,6 +6,18 @@ exports.register = async (req, res) => {
   try {
     const { username, email, password } = req.body;
 
+    if (!username || !email || !password) {
+      return res.status(400).json({
+        message: "All fields are required",
+      });
+    }
+
+    if (password.length < 4 || password.length > 9) {
+      return res.status(400).json({
+        message: "Password must be 4 to 9 characters",
+      });
+    }
+
     const exists = await prisma.user.findUnique({
       where: { email },
     });
@@ -26,7 +38,9 @@ exports.register = async (req, res) => {
       },
     });
 
-    res.status(201).json(user);
+    const { password: userPassword, ...safeUser } = user;
+
+    res.status(201).json(safeUser);
   } catch (err) {
     res.status(500).json({
       error: err.message,
@@ -128,15 +142,27 @@ exports.changePassword = async (req, res) => {
       });
     }
 
-    if (newPassword.length < 6) {
+    if (newPassword.length < 4 || newPassword.length > 9) {
       return res.status(400).json({
-        message: "New password must be at least 6 characters",
+        message: "New password must be 4 to 9 characters",
+      });
+    }
+
+    if (oldPassword === newPassword) {
+      return res.status(400).json({
+        message: "New password must be different from old password",
       });
     }
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
     });
+
+    if (!user) {
+      return res.status(404).json({
+        message: "User not found",
+      });
+    }
 
     const match = await bcrypt.compare(oldPassword, user.password);
 

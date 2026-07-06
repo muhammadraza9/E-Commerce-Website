@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { showSuccessToast, showErrorToast } from "@/utils/toast";
 import { generateInvoicePDF } from "@/utils/invoiceGenerator";
+import AdminOrdersSkeleton from "@/components/skeletons/AdminOrdersSkeleton";
 import api from "@/services/api";
 
 export default function AdminOrdersPage() {
@@ -105,15 +106,11 @@ export default function AdminOrdersPage() {
   ).length;
 
   if (loading) {
-    return (
-      <div className="text-white text-center py-20">
-        Loading Orders...
-      </div>
-    );
+    return <AdminOrdersSkeleton />;
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-12">
+    <div className="w-full max-w-full overflow-hidden px-4 sm:px-6 py-8">
       <div className="mb-8">
         <p className="text-[#D4AF37] text-xs sm:text-sm font-semibold tracking-widest uppercase mb-2">
           Admin Panel
@@ -124,7 +121,7 @@ export default function AdminOrdersPage() {
         </h1>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
         <div className="bg-slate-900 border border-slate-700 rounded-2xl p-5">
           <p className="text-gray-400 text-sm">Total Orders</p>
           <h2 className="text-2xl font-bold text-white mt-1">
@@ -187,79 +184,93 @@ export default function AdminOrdersPage() {
           </p>
         </div>
       ) : (
-        <div className="overflow-x-auto bg-slate-900 rounded-2xl border border-slate-700">
-          <table className="w-full min-w-[1050px]">
-            <thead>
-              <tr className="border-b border-slate-700 text-white">
-                <th className="p-4 text-left">Tracking ID</th>
-                <th className="p-4 text-left">Customer</th>
-                <th className="p-4 text-left">Email</th>
-                <th className="p-4 text-left">Date</th>
-                <th className="p-4 text-left">Total</th>
-                <th className="p-4 text-left">Status</th>
-                <th className="p-4 text-left">Update Status</th>
-                <th className="p-4 text-left">Invoice</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {filteredOrders.map((order) => (
-                <tr
-                  key={order.id}
-                  className="border-b border-slate-800 text-white hover:bg-slate-800/50 transition"
-                >
-                  <td className="p-4 font-semibold text-[#D4AF37]">
-                    {order.trackingId}
-                  </td>
-
-                  <td className="p-4">{order.customer}</td>
-
-                  <td className="p-4 text-gray-300">{order.email}</td>
-
-                  <td className="p-4 text-gray-300">
-                    {new Date(order.createdAt).toLocaleDateString("en-PK")}
-                  </td>
-
-                  <td className="p-4 font-semibold">Rs {order.total}</td>
-
-                  <td className="p-4">
-                    <span
-                      className={`${getStatusColor(
-                        order.status
-                      )} px-3 py-1 rounded-full text-sm text-white`}
-                    >
-                      {order.status}
-                    </span>
-                  </td>
-
-                  <td className="p-4">
-                    <select
-                      value={order.status}
-                      onChange={(e) =>
-                        updateStatus(order.id, e.target.value)
-                      }
-                      className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white outline-none focus:border-[#D4AF37]"
-                    >
-                      <option value="Pending">Pending</option>
-                      <option value="Processing">Processing</option>
-                      <option value="Shipped">Shipped</option>
-                      <option value="Delivered">Delivered</option>
-                      <option value="Cancelled">Cancelled</option>
-                    </select>
-                  </td>
-
-                  <td className="p-4">
-                    <button
-                      onClick={() => handleDownloadInvoice(order)}
-                      className="bg-[#D4AF37] text-black px-4 py-2 rounded-lg font-semibold hover:bg-yellow-400 transition whitespace-nowrap"
-                    >
-                      📄 Invoice
-                    </button>
-                  </td>
+        <div className="w-full max-w-full rounded-2xl border border-slate-700 bg-slate-900 overflow-hidden">
+          <div className="w-full overflow-x-auto scrollbar-hide">
+            <table className="w-full min-w-[1050px]">
+              <thead>
+                <tr className="border-b border-slate-700 text-white">
+                  <th className="p-4 text-left whitespace-nowrap">
+                    Tracking ID
+                  </th>
+                  <th className="p-4 text-left whitespace-nowrap">
+                    Customer
+                  </th>
+                  <th className="p-4 text-left whitespace-nowrap">Email</th>
+                  <th className="p-4 text-left whitespace-nowrap">Date</th>
+                  <th className="p-4 text-left whitespace-nowrap">Total</th>
+                  <th className="p-4 text-left whitespace-nowrap">Status</th>
+                  <th className="p-4 text-left whitespace-nowrap">
+                    Update Status
+                  </th>
+                  <th className="p-4 text-left whitespace-nowrap">Invoice</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+
+              <tbody>
+                {filteredOrders.map((order) => (
+                  <tr
+                    key={order.id}
+                    className="border-b border-slate-800 text-white hover:bg-slate-800/50 transition"
+                  >
+                    <td className="p-4 font-semibold text-[#D4AF37] whitespace-nowrap">
+                      {order.trackingId}
+                    </td>
+
+                    <td className="p-4 whitespace-nowrap">
+                      {order.customer}
+                    </td>
+
+                    <td className="p-4 text-gray-300 whitespace-nowrap">
+                      {order.email}
+                    </td>
+
+                    <td className="p-4 text-gray-300 whitespace-nowrap">
+                      {new Date(order.createdAt).toLocaleDateString("en-PK")}
+                    </td>
+
+                    <td className="p-4 font-semibold whitespace-nowrap">
+                      Rs {order.total}
+                    </td>
+
+                    <td className="p-4 whitespace-nowrap">
+                      <span
+                        className={`${getStatusColor(
+                          order.status
+                        )} px-3 py-1 rounded-full text-sm text-white whitespace-nowrap`}
+                      >
+                        {order.status}
+                      </span>
+                    </td>
+
+                    <td className="p-4 whitespace-nowrap">
+                      <select
+                        value={order.status}
+                        onChange={(e) =>
+                          updateStatus(order.id, e.target.value)
+                        }
+                        className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white outline-none focus:border-[#D4AF37]"
+                      >
+                        <option value="Pending">Pending</option>
+                        <option value="Processing">Processing</option>
+                        <option value="Shipped">Shipped</option>
+                        <option value="Delivered">Delivered</option>
+                        <option value="Cancelled">Cancelled</option>
+                      </select>
+                    </td>
+
+                    <td className="p-4 whitespace-nowrap">
+                      <button
+                        onClick={() => handleDownloadInvoice(order)}
+                        className="bg-[#D4AF37] text-black px-4 py-2 rounded-lg font-semibold hover:bg-yellow-400 transition whitespace-nowrap"
+                      >
+                        📄 Invoice
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

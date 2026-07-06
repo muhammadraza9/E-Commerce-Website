@@ -1,9 +1,10 @@
 "use client";
 
-import { useContext } from "react";
+import { useContext, useEffect, useState } from "react";
 import Link from "next/link";
 import { CartContext } from "@/context/CartContext";
 import { FavoritesContext } from "@/context/FavoritesContext";
+import FavoritesSkeleton from "@/components/skeletons/FavoritesSkeleton";
 import {
   showCartToast,
   showErrorToast,
@@ -14,6 +15,16 @@ export default function FavoritesPage() {
   const { addToCart } = useContext(CartContext);
   const { favorites, removeFromFavorites, clearFavorites } =
     useContext(FavoritesContext);
+
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setLoading(false);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleMoveToCart = (product) => {
     addToCart(product);
@@ -32,6 +43,10 @@ export default function FavoritesPage() {
     clearFavorites();
     showSuccessToast("Favorites cleared");
   };
+
+  if (loading) {
+    return <FavoritesSkeleton />;
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-12">

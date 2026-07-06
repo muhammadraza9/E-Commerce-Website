@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import api from "@/services/api";
+import AddProductSkeleton from "@/components/skeletons/AddProductSkeleton";
 import {
   showSuccessToast,
   showErrorToast,
@@ -25,6 +26,15 @@ export default function AddProductPage() {
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState("");
   const [loading, setLoading] = useState(false);
+  const [pageLoading, setPageLoading] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setPageLoading(false);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -39,6 +49,7 @@ export default function AddProductPage() {
     setImageMode(mode);
     setImageFile(null);
     setImagePreview("");
+
     setFormData((prev) => ({
       ...prev,
       image: "",
@@ -84,6 +95,11 @@ export default function AddProductPage() {
 
     if (!file.type.startsWith("image/")) {
       showErrorToast("Invalid image.");
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      showErrorToast("Image must be less than 5MB.");
       return;
     }
 
@@ -155,9 +171,12 @@ export default function AddProductPage() {
     }
   };
 
+  if (pageLoading) {
+    return <AddProductSkeleton />;
+  }
+
   return (
     <div className="max-w-3xl mx-auto px-6 py-12">
-
       <h1 className="text-4xl font-bold text-white mb-8">
         Add New Product
       </h1>
@@ -166,11 +185,7 @@ export default function AddProductPage() {
         onSubmit={handleSubmit}
         className="bg-slate-900 border border-slate-700 rounded-2xl p-6 space-y-5"
       >
-
-        {/* Name */}
-
         <div>
-
           <label className="block text-white mb-2">
             Product Name
           </label>
@@ -180,16 +195,12 @@ export default function AddProductPage() {
             name="name"
             value={formData.name}
             onChange={handleChange}
-            className="w-full bg-slate-800 border border-slate-600 text-white p-3 rounded-lg"
+            className="w-full bg-slate-800 border border-slate-600 text-white p-3 rounded-lg outline-none focus:border-[#D4AF37]"
             required
           />
-
         </div>
 
-        {/* Description */}
-
         <div>
-
           <label className="block text-white mb-2">
             Description
           </label>
@@ -199,28 +210,23 @@ export default function AddProductPage() {
             name="description"
             value={formData.description}
             onChange={handleChange}
-            className="w-full bg-slate-800 border border-slate-600 text-white p-3 rounded-lg"
+            className="w-full bg-slate-800 border border-slate-600 text-white p-3 rounded-lg outline-none resize-none focus:border-[#D4AF37]"
             required
           />
-
         </div>
 
-        {/* Image */}
-
         <div>
-
           <label className="block text-white mb-2">
             Product Image
           </label>
 
           <div className="flex gap-2 mb-4">
-
             <button
               type="button"
               onClick={() => handleImageModeSwitch("url")}
-              className={`flex-1 py-2 rounded-lg ${
+              className={`flex-1 py-2 rounded-lg transition ${
                 imageMode === "url"
-                  ? "bg-green-600 text-white"
+                  ? "bg-[#D4AF37] text-black font-semibold"
                   : "bg-slate-700 text-gray-300"
               }`}
             >
@@ -230,35 +236,31 @@ export default function AddProductPage() {
             <button
               type="button"
               onClick={() => handleImageModeSwitch("file")}
-              className={`flex-1 py-2 rounded-lg ${
+              className={`flex-1 py-2 rounded-lg transition ${
                 imageMode === "file"
-                  ? "bg-green-600 text-white"
+                  ? "bg-[#D4AF37] text-black font-semibold"
                   : "bg-slate-700 text-gray-300"
               }`}
             >
               Upload
             </button>
-
           </div>
 
           {imageMode === "url" ? (
-
             <input
               type="text"
               value={formData.image}
               onChange={handleUrlChange}
-              className="w-full bg-slate-800 border border-slate-600 text-white p-3 rounded-lg"
+              placeholder="Paste image URL..."
+              className="w-full bg-slate-800 border border-slate-600 text-white p-3 rounded-lg outline-none focus:border-[#D4AF37]"
             />
-
           ) : (
-
             <div
               onDrop={handleDrop}
               onDragOver={handleDragOver}
               onClick={() => fileInputRef.current.click()}
-              className="border-2 border-dashed border-slate-600 rounded-xl p-8 text-center cursor-pointer"
+              className="border-2 border-dashed border-slate-600 rounded-xl p-8 text-center cursor-pointer hover:border-[#D4AF37] transition"
             >
-
               <input
                 ref={fileInputRef}
                 type="file"
@@ -267,27 +269,24 @@ export default function AddProductPage() {
                 onChange={handleFileChange}
               />
 
-              Upload Image
+              <p className="text-white font-semibold">Upload Image</p>
 
+              <p className="text-gray-400 text-sm mt-2">
+                Drag & drop image here or click to browse
+              </p>
             </div>
-
           )}
 
           {imagePreview && (
-
             <img
               src={imagePreview}
-              className="mt-5 w-52 rounded-xl border border-slate-700"
+              alt="Preview"
+              className="mt-5 w-52 h-52 object-cover rounded-xl border border-slate-700"
             />
-
           )}
-
         </div>
 
-        {/* Category */}
-
         <div>
-
           <label className="block text-white mb-2">
             Category
           </label>
@@ -296,23 +295,17 @@ export default function AddProductPage() {
             name="category"
             value={formData.category}
             onChange={handleChange}
-            className="w-full bg-slate-800 border border-slate-600 text-white p-3 rounded-lg"
+            className="w-full bg-slate-800 border border-slate-600 text-white p-3 rounded-lg outline-none focus:border-[#D4AF37]"
           >
-
             <option>Clothing</option>
             <option>Shoes</option>
             <option>Accessories</option>
             <option>Hoodies</option>
             <option>T-Shirts</option>
-
           </select>
-
         </div>
 
-        {/* Price */}
-
         <div>
-
           <label className="block text-white mb-2">
             Price
           </label>
@@ -322,16 +315,12 @@ export default function AddProductPage() {
             name="price"
             value={formData.price}
             onChange={handleChange}
-            className="w-full bg-slate-800 border border-slate-600 text-white p-3 rounded-lg"
+            className="w-full bg-slate-800 border border-slate-600 text-white p-3 rounded-lg outline-none focus:border-[#D4AF37]"
             required
           />
-
         </div>
 
-        {/* Featured */}
-
         <div className="flex items-center gap-3 bg-slate-800 border border-slate-700 rounded-lg p-4">
-
           <input
             type="checkbox"
             id="featured"
@@ -347,18 +336,15 @@ export default function AddProductPage() {
           >
             ⭐ Mark this product as Featured
           </label>
-
         </div>
 
         <button
           disabled={loading}
-          className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-semibold"
+          className="w-full bg-[#D4AF37] hover:bg-yellow-400 text-black py-3 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition"
         >
           {loading ? "Adding..." : "Add Product"}
         </button>
-
       </form>
-
     </div>
   );
 }

@@ -4,12 +4,14 @@ import { useState, useContext, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import api from "@/services/api";
 import { CartContext } from "@/context/CartContext";
+import CheckoutSkeleton from "@/components/skeletons/CheckoutSkeleton";
 import { showSuccessToast, showErrorToast } from "@/utils/toast";
 
 export default function CheckoutPage() {
   const router = useRouter();
 
-  const { cart, checkoutItems, removeCheckedOutItems } = useContext(CartContext);
+  const { cart, checkoutItems, removeCheckedOutItems } =
+    useContext(CartContext);
 
   const itemsToCheckout = checkoutItems.length > 0 ? checkoutItems : cart;
 
@@ -25,26 +27,30 @@ export default function CheckoutPage() {
     paymentMethod: "",
   });
 
-  // ── Require login before allowing checkout ──
   useEffect(() => {
-    const storedUser = localStorage.getItem("user");
-    const token = localStorage.getItem("token");
+    const timer = setTimeout(() => {
+      const storedUser = localStorage.getItem("user");
+      const token = localStorage.getItem("token");
 
-    if (!storedUser || !token) {
-      showErrorToast("Please sign in to place an order");
-      router.push("/signin");
-      return;
-    }
+      if (!storedUser || !token) {
+        showErrorToast("Please sign in to place an order");
+        router.push("/signin");
+        return;
+      }
 
-    const userData = JSON.parse(storedUser);
-    setFormData((prev) => ({
-      ...prev,
-      name: userData.username || userData.name || prev.name,
-      email: userData.email || prev.email,
-    }));
+      const userData = JSON.parse(storedUser);
 
-    setCheckingAuth(false);
-  }, []);
+      setFormData((prev) => ({
+        ...prev,
+        name: userData.username || userData.name || prev.name,
+        email: userData.email || prev.email,
+      }));
+
+      setCheckingAuth(false);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [router]);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -53,7 +59,6 @@ export default function CheckoutPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Double-check login right before placing the order too
     const storedUser = localStorage.getItem("user");
     const token = localStorage.getItem("token");
 
@@ -108,11 +113,9 @@ export default function CheckoutPage() {
       setTimeout(() => {
         router.push("/order-success");
       }, 1500);
-
     } catch (error) {
       console.log(error);
 
-      // If token expired/invalid, backend will send 401 -> send user to signin
       if (error?.response?.status === 401) {
         showErrorToast("Please sign in to place an order");
         router.push("/signin");
@@ -129,7 +132,6 @@ export default function CheckoutPage() {
     0
   );
 
-  // ── All fields must be filled before order can be placed ──
   const isFormComplete =
     formData.name.trim() !== "" &&
     formData.email.trim() !== "" &&
@@ -137,40 +139,34 @@ export default function CheckoutPage() {
     formData.address.trim() !== "" &&
     formData.paymentMethod !== "";
 
-  // Don't flash the checkout form before the auth check resolves
   if (checkingAuth) {
-    return null;
+    return <CheckoutSkeleton />;
   }
 
   return (
     <div className="min-h-screen relative">
-
-      {/* ── Full Page Background Image ── */}
       <div
         className="absolute inset-0 z-0"
         style={{
-          backgroundImage: 
-           "url('https://wallpapers.com/images/hd/e-commerce-1920-x-1080-wallpaper-tb4uqckgoo0883zw.jpg')",
+          backgroundImage:
+            "url('https://wallpapers.com/images/hd/e-commerce-1920-x-1080-wallpaper-tb4uqckgoo0883zw.jpg')",
           backgroundSize: "cover",
           backgroundPosition: "center",
           backgroundRepeat: "no-repeat",
           filter: "brightness(1)",
         }}
       />
-      {/* Navy blue overlay */}
+
       <div
         className="absolute inset-0 z-0"
         style={{ background: "rgba(10, 22, 40, 0.85)" }}
       />
 
-      {/* ── Page Content ── */}
       <div className="relative z-10 max-w-3xl mx-auto px-6 py-12 min-h-screen">
-
         <h1 className="text-4xl font-bold mb-8 text-white">
           Check<span className="text-[#D4AF37]">out</span>
         </h1>
 
-        {/* Items — only show before order is placed */}
         {!orderPlaced && (
           <div
             className="rounded-2xl p-6 mb-6 border"
@@ -180,11 +176,16 @@ export default function CheckoutPage() {
             }}
           >
             <h2 className="text-lg font-semibold mb-4 text-white">
-              {itemsToCheckout.length} item{itemsToCheckout.length !== 1 ? "s" : ""} in this order
+              {itemsToCheckout.length} item
+              {itemsToCheckout.length !== 1 ? "s" : ""} in this order
             </h2>
+
             <div className="space-y-3">
               {itemsToCheckout.map((item) => (
-                <div key={item.id} className="flex justify-between items-center text-sm">
+                <div
+                  key={item.id}
+                  className="flex justify-between items-center text-sm"
+                >
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 rounded-lg overflow-hidden border border-[#D4AF37]/30 shrink-0">
                       <img
@@ -193,27 +194,31 @@ export default function CheckoutPage() {
                         className="w-full h-full object-cover"
                       />
                     </div>
+
                     <span className="text-gray-300">
                       {item.name} × {item.quantity}
                     </span>
                   </div>
+
                   <span className="text-[#D4AF37] font-semibold">
                     Rs {item.price * item.quantity}
                   </span>
                 </div>
               ))}
             </div>
+
             <div
               className="mt-4 pt-4 flex justify-between items-center"
               style={{ borderTop: "1px solid rgba(212,175,55,0.2)" }}
             >
               <span className="text-white font-semibold">Total</span>
-              <span className="text-[#D4AF37] font-bold text-lg">Rs {total}</span>
+              <span className="text-[#D4AF37] font-bold text-lg">
+                Rs {total}
+              </span>
             </div>
           </div>
         )}
 
-        {/* Form */}
         <form
           onSubmit={handleSubmit}
           className="space-y-5 rounded-2xl p-8 border"
@@ -227,7 +232,10 @@ export default function CheckoutPage() {
             placeholder="Full Name"
             value={formData.name}
             className="w-full border text-white placeholder-gray-400 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
-            style={{ backgroundColor: "rgba(10,22,40,0.8)", borderColor: "rgba(212,175,55,0.2)" }}
+            style={{
+              backgroundColor: "rgba(10,22,40,0.8)",
+              borderColor: "rgba(212,175,55,0.2)",
+            }}
             onChange={handleChange}
             required
           />
@@ -238,7 +246,10 @@ export default function CheckoutPage() {
             placeholder="Email"
             value={formData.email}
             className="w-full border text-white placeholder-gray-400 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
-            style={{ backgroundColor: "rgba(10,22,40,0.8)", borderColor: "rgba(212,175,55,0.2)" }}
+            style={{
+              backgroundColor: "rgba(10,22,40,0.8)",
+              borderColor: "rgba(212,175,55,0.2)",
+            }}
             onChange={handleChange}
             required
           />
@@ -248,7 +259,10 @@ export default function CheckoutPage() {
             placeholder="Phone Number"
             value={formData.phone}
             className="w-full border text-white placeholder-gray-400 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
-            style={{ backgroundColor: "rgba(10,22,40,0.8)", borderColor: "rgba(212,175,55,0.2)" }}
+            style={{
+              backgroundColor: "rgba(10,22,40,0.8)",
+              borderColor: "rgba(212,175,55,0.2)",
+            }}
             onChange={handleChange}
             required
           />
@@ -259,12 +273,14 @@ export default function CheckoutPage() {
             rows="4"
             value={formData.address}
             className="w-full border text-white placeholder-gray-400 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37] resize-none"
-            style={{ backgroundColor: "rgba(10,22,40,0.8)", borderColor: "rgba(212,175,55,0.2)" }}
+            style={{
+              backgroundColor: "rgba(10,22,40,0.8)",
+              borderColor: "rgba(212,175,55,0.2)",
+            }}
             onChange={handleChange}
             required
           />
 
-          {/* Payment Method */}
           <div>
             <label className="block text-white mb-3 font-medium">
               Payment Method
@@ -299,6 +315,7 @@ export default function CheckoutPage() {
                     className="accent-[#D4AF37] w-4 h-4"
                     required
                   />
+
                   <span className="text-white text-sm font-medium">
                     {method.label}
                   </span>
@@ -310,16 +327,11 @@ export default function CheckoutPage() {
           <button
             type="submit"
             disabled={loading || !isFormComplete}
-            className="w-full py-3 rounded-xl font-semibold transition-all duration-300 cursor-pointer
-              bg-[#D4AF37] text-[#0a1628]
-              disabled:opacity-40 disabled:cursor-not-allowed disabled:scale-100
-              enabled:hover:scale-[1.02]"
+            className="w-full py-3 rounded-xl font-semibold transition-all duration-300 cursor-pointer bg-[#D4AF37] text-[#0a1628] disabled:opacity-40 disabled:cursor-not-allowed disabled:scale-100 enabled:hover:scale-[1.02]"
           >
             {loading ? "Placing Order..." : "Place Order"}
           </button>
-
         </form>
-
       </div>
     </div>
   );

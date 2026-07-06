@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import api from "@/services/api";
 import Link from "next/link";
+import SignInSkeleton from "@/components/skeletons/SignInSkeleton";
 import { showSuccessToast, showErrorToast } from "@/utils/toast";
 
 export default function SigninPage() {
@@ -15,13 +16,21 @@ export default function SigninPage() {
   });
 
   const [loading, setLoading] = useState(false);
+  const [pageLoading, setPageLoading] = useState(true);
 
   useEffect(() => {
-    const prefillEmail = sessionStorage.getItem("prefillEmail");
-    if (prefillEmail) {
-      setFormData((prev) => ({ ...prev, email: prefillEmail }));
-      sessionStorage.removeItem("prefillEmail");
-    }
+    const timer = setTimeout(() => {
+      const prefillEmail = sessionStorage.getItem("prefillEmail");
+
+      if (prefillEmail) {
+        setFormData((prev) => ({ ...prev, email: prefillEmail }));
+        sessionStorage.removeItem("prefillEmail");
+      }
+
+      setPageLoading(false);
+    }, 500);
+
+    return () => clearTimeout(timer);
   }, []);
 
   const handleChange = (e) => {
@@ -55,18 +64,18 @@ export default function SigninPage() {
       }, 500);
     } catch (error) {
       console.log(error);
-      showErrorToast(
-        error?.response?.data?.message || "Login Failed"
-      );
+      showErrorToast(error?.response?.data?.message || "Login Failed");
     } finally {
       setLoading(false);
     }
   };
 
+  if (pageLoading) {
+    return <SignInSkeleton />;
+  }
+
   return (
     <div className="relative min-h-screen flex items-center justify-center px-6">
-
-      {/* Background Image — men's fashion theme */}
       <div
         className="absolute inset-0 z-0"
         style={{
@@ -77,7 +86,7 @@ export default function SigninPage() {
           backgroundRepeat: "no-repeat",
         }}
       />
-      {/* Navy overlay */}
+
       <div
         className="absolute inset-0 z-0"
         style={{ background: "rgba(10, 22, 40, 0.85)" }}
@@ -99,6 +108,7 @@ export default function SigninPage() {
           <label className="block text-white mb-2">
             Email
           </label>
+
           <input
             type="email"
             name="email"
@@ -106,7 +116,11 @@ export default function SigninPage() {
             onChange={handleChange}
             autoComplete="email"
             className="w-full p-4 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
-            style={{ backgroundColor: "rgba(10,22,40,0.8)", borderColor: "#D4AF37", borderWidth: "1px" }}
+            style={{
+              backgroundColor: "rgba(10,22,40,0.8)",
+              borderColor: "#D4AF37",
+              borderWidth: "1px",
+            }}
             required
           />
         </div>
@@ -115,6 +129,7 @@ export default function SigninPage() {
           <label className="block text-white mb-2">
             Password
           </label>
+
           <input
             type="password"
             name="password"
@@ -122,15 +137,19 @@ export default function SigninPage() {
             onChange={handleChange}
             autoComplete="current-password"
             className="w-full p-4 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
-            style={{ backgroundColor: "rgba(10,22,40,0.8)", borderColor: "#D4AF37", borderWidth: "1px" }}
+            style={{
+              backgroundColor: "rgba(10,22,40,0.8)",
+              borderColor: "#D4AF37",
+              borderWidth: "1px",
+            }}
             required
           />
         </div>
 
-       <button
+        <button
           disabled={loading}
           className="w-full bg-[#0B1F33] hover:bg-[#D4AF37] text-white border border-[#D4AF37] py-4 rounded-xl font-semibold text-lg transition-colors duration-200 disabled:opacity-60 cursor-pointer"
-         >
+        >
           {loading ? "Signing In..." : "Sign In"}
         </button>
 

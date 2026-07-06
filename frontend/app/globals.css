@@ -26,3 +26,12 @@ body {
    background: #001227;
    color: rgb(255, 253, 253);
 }
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}

@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import api from "@/services/api";
 import Link from "next/link";
+import SignUpSkeleton from "@/components/skeletons/SignUpSkeleton";
 import { showSuccessToast, showErrorToast } from "@/utils/toast";
 
 export default function SignupPage() {
@@ -16,6 +17,15 @@ export default function SignupPage() {
   });
 
   const [loading, setLoading] = useState(false);
+  const [pageLoading, setPageLoading] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setPageLoading(false);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleChange = (e) => {
     setFormData({
@@ -48,10 +58,12 @@ export default function SignupPage() {
     }
   };
 
+  if (pageLoading) {
+    return <SignUpSkeleton />;
+  }
+
   return (
     <div className="relative min-h-screen flex items-center justify-center px-6 pt-28 pb-10">
-
-      {/* Background Image — welcome / new member theme */}
       <div
         className="absolute inset-0 z-0"
         style={{
@@ -62,7 +74,7 @@ export default function SignupPage() {
           backgroundRepeat: "no-repeat",
         }}
       />
-      {/* Navy overlay */}
+
       <div
         className="absolute inset-0 z-0"
         style={{ background: "rgba(10, 22, 40, 0.85)" }}
@@ -84,6 +96,7 @@ export default function SignupPage() {
           <label className="block text-white mb-2">
             Username
           </label>
+
           <input
             type="text"
             name="username"
@@ -91,7 +104,11 @@ export default function SignupPage() {
             onChange={handleChange}
             autoComplete="username"
             className="w-full p-4 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
-            style={{ backgroundColor: "rgba(10,22,40,0.8)", borderColor: "#D4AF37", borderWidth: "1px" }}
+            style={{
+              backgroundColor: "rgba(10,22,40,0.8)",
+              borderColor: "#D4AF37",
+              borderWidth: "1px",
+            }}
             required
           />
         </div>
@@ -100,6 +117,7 @@ export default function SignupPage() {
           <label className="block text-white mb-2">
             Email
           </label>
+
           <input
             type="email"
             name="email"
@@ -107,7 +125,11 @@ export default function SignupPage() {
             onChange={handleChange}
             autoComplete="email"
             className="w-full p-4 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
-            style={{ backgroundColor: "rgba(10,22,40,0.8)", borderColor: "#D4AF37", borderWidth: "1px" }}
+            style={{
+              backgroundColor: "rgba(10,22,40,0.8)",
+              borderColor: "#D4AF37",
+              borderWidth: "1px",
+            }}
             required
           />
         </div>
@@ -116,6 +138,7 @@ export default function SignupPage() {
           <label className="block text-white mb-2">
             Password
           </label>
+
           <input
             type="password"
             name="password"
@@ -123,7 +146,11 @@ export default function SignupPage() {
             onChange={handleChange}
             autoComplete="new-password"
             className="w-full p-4 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
-            style={{ backgroundColor: "rgba(10,22,40,0.8)", borderColor: "#D4AF37", borderWidth: "1px" }}
+            style={{
+              backgroundColor: "rgba(10,22,40,0.8)",
+              borderColor: "#D4AF37",
+              borderWidth: "1px",
+            }}
             required
           />
         </div>

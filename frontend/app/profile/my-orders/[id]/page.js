@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import api from "@/services/api";
 import { generateInvoicePDF } from "@/utils/invoiceGenerator";
+import OrderDetailSkeleton from "@/components/skeletons/OrderDetailSkeleton";
 
 export default function OrderDetailPage() {
   const { id } = useParams();
@@ -54,7 +55,7 @@ export default function OrderDetailPage() {
   };
 
   const handleDownloadInvoice = () => {
-    generateInvoicePDF(order);
+    generateInvoicePDF(order, "user");
   };
 
   const getStatusColor = (status) => {
@@ -81,11 +82,7 @@ export default function OrderDetailPage() {
   }, [order]);
 
   if (loading) {
-    return (
-      <div className="max-w-5xl mx-auto px-6 py-12 text-center text-white">
-        Loading...
-      </div>
-    );
+    return <OrderDetailSkeleton />;
   }
 
   if (!order) {

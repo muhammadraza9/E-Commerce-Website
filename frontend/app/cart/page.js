@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useContext, useMemo, useState } from "react";
+import { useContext, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CartContext } from "@/context/CartContext";
+import CartSkeleton from "@/components/skeletons/CartSkeleton";
 
 export default function CartPage() {
   const {
@@ -17,7 +18,17 @@ export default function CartPage() {
   } = useContext(CartContext);
 
   const router = useRouter();
+
   const [selectedIds, setSelectedIds] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setLoading(false);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, []);
 
   const isAllSelected = cart.length > 0 && selectedIds.length === cart.length;
 
@@ -67,6 +78,10 @@ export default function CartPage() {
     startCheckout(selectedItems);
     router.push("/checkout");
   };
+
+  if (loading) {
+    return <CartSkeleton />;
+  }
 
   return (
     <div className="min-h-screen relative">
