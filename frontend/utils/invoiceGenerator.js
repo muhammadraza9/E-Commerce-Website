@@ -1,71 +1,96 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
+const formatCurrency = (amount) => {
+  return `Rs ${Number(amount || 0).toLocaleString("en-PK")}`;
+};
+
+const formatDate = (date) => {
+  if (!date) return "N/A";
+  return new Date(date).toLocaleDateString("en-PK", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+};
+
 export const generateInvoicePDF = (order) => {
   if (!order) return;
 
   const doc = new jsPDF("p", "mm", "a4");
 
   const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
 
-  doc.setFillColor(11, 31, 51);
-  doc.rect(0, 0, pageWidth, 35, "F");
+  const navy = [11, 31, 51];
+  const gold = [212, 175, 55];
+  const lightGray = [245, 245, 245];
+  const darkText = [30, 30, 30];
 
-  doc.setTextColor(212, 175, 55);
-  doc.setFontSize(22);
+  // Header
+  doc.setFillColor(...navy);
+  doc.rect(0, 0, pageWidth, 42, "F");
+
+  doc.setTextColor(...gold);
+  doc.setFontSize(24);
   doc.setFont("helvetica", "bold");
-  doc.text("STYLE AVENUE", 14, 16);
+  doc.text("STYLE AVENUE", 14, 17);
 
   doc.setTextColor(255, 255, 255);
-  doc.setFontSize(11);
+  doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
-  doc.text("Official Invoice", 14, 24);
+  doc.text("Premium Fashion Store", 14, 25);
+  doc.text("Official Tax Invoice", 14, 32);
+
+  doc.setTextColor(...gold);
+  doc.setFontSize(18);
+  doc.setFont("helvetica", "bold");
+  doc.text("INVOICE", pageWidth - 14, 17, { align: "right" });
 
   doc.setTextColor(255, 255, 255);
-  doc.setFontSize(10);
-  doc.text(`Invoice #${order.id}`, pageWidth - 45, 16);
-  doc.text(`Tracking: ${order.trackingId}`, pageWidth - 75, 24);
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.text(`Invoice No: SA-${order.id}`, pageWidth - 14, 25, {
+    align: "right",
+  });
+  doc.text(`Tracking: ${order.trackingId || "N/A"}`, pageWidth - 14, 32, {
+    align: "right",
+  });
 
-  doc.setTextColor(0, 0, 0);
-  doc.setFontSize(14);
+  // Info Boxes
+  doc.setFillColor(...lightGray);
+  doc.roundedRect(14, 52, 84, 47, 3, 3, "F");
+  doc.roundedRect(112, 52, 84, 47, 3, 3, "F");
+
+  doc.setTextColor(...darkText);
+  doc.setFontSize(12);
   doc.setFont("helvetica", "bold");
-  doc.text("Order Information", 14, 48);
+  doc.text("Order Information", 20, 62);
+  doc.text("Customer Information", 118, 62);
 
-  doc.setFontSize(10);
+  doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
 
-  doc.text(`Order ID: #${order.id}`, 14, 58);
-  doc.text(`Tracking ID: ${order.trackingId}`, 14, 65);
-  doc.text(
-    `Order Date: ${new Date(order.createdAt).toLocaleDateString("en-PK")}`,
-    14,
-    72
-  );
-  doc.text(`Order Status: ${order.status}`, 14, 79);
-  doc.text(`Payment Method: ${order.paymentMethod || "COD"}`, 14, 86);
-  doc.text(`Payment Status: ${order.paymentStatus || "PENDING"}`, 14, 93);
+  doc.text(`Order ID: #${order.id}`, 20, 71);
+  doc.text(`Order Date: ${formatDate(order.createdAt)}`, 20, 78);
+  doc.text(`Status: ${order.status || "Pending"}`, 20, 85);
+  doc.text(`Payment: ${order.paymentMethod || "COD"}`, 20, 92);
 
-  doc.setFontSize(14);
-  doc.setFont("helvetica", "bold");
-  doc.text("Customer Information", 115, 48);
-
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "normal");
-
-  doc.text(`Name: ${order.customer || "N/A"}`, 115, 58);
-  doc.text(`Email: ${order.email || "N/A"}`, 115, 65);
-  doc.text(`Phone: ${order.phone || "N/A"}`, 115, 72);
+  doc.text(`Name: ${order.customer || "N/A"}`, 118, 71);
+  doc.text(`Email: ${order.email || "N/A"}`, 118, 78);
+  doc.text(`Phone: ${order.phone || "N/A"}`, 118, 85);
 
   const addressLines = doc.splitTextToSize(
     `Address: ${order.address || "N/A"}`,
-    80
+    70
   );
-  doc.text(addressLines, 115, 79);
+  doc.text(addressLines, 118, 92);
 
+  // Table
   const tableRows =
     order.items?.map((item, index) => {
       const productName = item.product?.name || `Product ${index + 1}`;
-      const quantity = item.quantity || 1;
+      const quantity = Number(item.quantity || 1);
       const price = Number(item.price || 0);
       const subtotal = quantity * price;
 
@@ -73,70 +98,95 @@ export const generateInvoicePDF = (order) => {
         index + 1,
         productName,
         quantity,
-        `Rs ${price}`,
-        `Rs ${subtotal}`,
+        formatCurrency(price),
+        formatCurrency(subtotal),
       ];
     }) || [];
 
   autoTable(doc, {
-    startY: 110,
-    head: [["#", "Product", "Qty", "Price", "Total"]],
+    startY: 112,
+    head: [["#", "Product", "Qty", "Unit Price", "Subtotal"]],
     body: tableRows,
     theme: "grid",
     headStyles: {
-      fillColor: [11, 31, 51],
-      textColor: [212, 175, 55],
+      fillColor: navy,
+      textColor: gold,
       fontStyle: "bold",
+      halign: "center",
     },
     styles: {
       fontSize: 9,
       cellPadding: 3,
+      textColor: darkText,
+      lineColor: [220, 220, 220],
+      lineWidth: 0.2,
     },
     columnStyles: {
-      0: { cellWidth: 12 },
-      1: { cellWidth: 85 },
-      2: { cellWidth: 18 },
-      3: { cellWidth: 35 },
-      4: { cellWidth: 35 },
+      0: { cellWidth: 12, halign: "center" },
+      1: { cellWidth: 82 },
+      2: { cellWidth: 18, halign: "center" },
+      3: { cellWidth: 36, halign: "right" },
+      4: { cellWidth: 36, halign: "right" },
     },
   });
 
   const finalY = doc.lastAutoTable.finalY + 12;
 
-  const subtotal = order.items?.reduce((sum, item) => {
-    return sum + Number(item.price || 0) * Number(item.quantity || 1);
-  }, 0);
+  const subtotal =
+    order.items?.reduce((sum, item) => {
+      return sum + Number(item.price || 0) * Number(item.quantity || 1);
+    }, 0) || 0;
 
-  const shipping = 0;
-  const grandTotal = Number(order.total || subtotal || 0);
+  const shipping = Number(order.shippingFee || 0);
+  const grandTotal = Number(order.total || subtotal + shipping || 0);
+
+  // Total Box
+  doc.setFillColor(...lightGray);
+  doc.roundedRect(120, finalY - 4, 76, 38, 3, 3, "F");
+
+  doc.setTextColor(...darkText);
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "normal");
+
+  doc.text("Subtotal", 126, finalY + 4);
+  doc.text(formatCurrency(subtotal), 190, finalY + 4, { align: "right" });
+
+  doc.text("Shipping", 126, finalY + 12);
+  doc.text(formatCurrency(shipping), 190, finalY + 12, { align: "right" });
+
+  doc.setDrawColor(210, 210, 210);
+  doc.line(126, finalY + 17, 190, finalY + 17);
 
   doc.setFont("helvetica", "bold");
+  doc.setTextColor(...gold);
   doc.setFontSize(12);
+  doc.text("Grand Total", 126, finalY + 27);
+  doc.text(formatCurrency(grandTotal), 190, finalY + 27, { align: "right" });
 
-  doc.text("Subtotal:", 145, finalY);
-  doc.text(`Rs ${subtotal}`, 175, finalY);
-
-  doc.text("Shipping:", 145, finalY + 8);
-  doc.text(`Rs ${shipping}`, 175, finalY + 8);
-
-  doc.setTextColor(212, 175, 55);
-  doc.text("Grand Total:", 145, finalY + 18);
-  doc.text(`Rs ${grandTotal}`, 175, finalY + 18);
-
-  doc.setTextColor(120, 120, 120);
+  // Note
+  doc.setTextColor(90, 90, 90);
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
 
   doc.text(
-    "Thank you for shopping with Style Avenue.",
+    "Note: This invoice is computer generated and does not require a signature.",
     14,
-    282
+    finalY + 48
   );
 
+  // Footer
+  doc.setDrawColor(...gold);
+  doc.line(14, pageHeight - 22, pageWidth - 14, pageHeight - 22);
+
+  doc.setTextColor(...darkText);
+  doc.setFontSize(9);
+  doc.text("Thank you for shopping with Style Avenue.", 14, pageHeight - 14);
+
+  doc.setTextColor(100, 100, 100);
   doc.text(
-    "support@styleavenue.pk | www.styleavenue.pk",
+    "raza@styleavenue.pk | www.styleavenue.pk",
     14,
-    288
+    pageHeight - 8
   );
 
   doc.save(`Style-Avenue-Invoice-${order.trackingId || order.id}.pdf`);
