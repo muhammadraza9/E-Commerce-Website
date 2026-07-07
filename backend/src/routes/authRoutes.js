@@ -24,3 +24,4 @@ router.patch("/users/:id/role", verifyToken, verifyAdmin, updateUserRole);
 router.delete("/users/:id", verifyToken, verifyAdmin, deleteUser);
 
 module.exports = router;
+// clean auth routes
