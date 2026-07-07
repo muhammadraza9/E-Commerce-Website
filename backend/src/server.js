@@ -19,15 +19,12 @@ const app = express();
 const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:3001",
-
-  // Production Frontend
   "https://e-commerce-style-avenue.vercel.app",
 ];
 
 app.use(
   cors({
     origin(origin, callback) {
-      // Allow Postman, Mobile Apps, Server Requests
       if (!origin) return callback(null, true);
 
       if (allowedOrigins.includes(origin)) {
@@ -35,35 +32,20 @@ app.use(
       }
 
       console.log("❌ Blocked Origin:", origin);
-
       return callback(new Error("Not allowed by CORS"));
     },
 
     credentials: true,
-    methods: [
-      "GET",
-      "POST",
-      "PUT",
-      "PATCH",
-      "DELETE",
-      "OPTIONS",
-    ],
-    allowedHeaders: [
-      "Content-Type",
-      "Authorization",
-    ],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
-
-// Handle Preflight
-app.options("*", cors());
 
 /* ===========================
    Middlewares
 =========================== */
 
 app.use(express.json());
-
 app.use(express.urlencoded({ extended: true }));
 
 /* ===========================
@@ -82,17 +64,11 @@ app.get("/", (req, res) => {
 =========================== */
 
 app.use("/api/products", productRoutes);
-
 app.use("/api/orders", orderRoutes);
-
 app.use("/api/auth", authRoutes);
-
 app.use("/api/reviews", reviewRoutes);
-
 app.use("/api/analytics", analyticsRoutes);
-
 app.use("/api/payment", paymentRoutes);
-
 app.use("/api/admin-settings", adminSettingRoutes);
 
 /* ===========================
