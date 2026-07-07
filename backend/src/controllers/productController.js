@@ -9,6 +9,7 @@ const getProducts = async (req, res) => {
     const {
       search = "",
       category = "",
+      featured = "",
       sort = "newest",
       page = 1,
       limit = 12,
@@ -21,8 +22,7 @@ const getProducts = async (req, res) => {
     const where = {};
 
     // Search
-
-    if (search.trim()) {
+    if (search && search.trim()) {
       where.OR = [
         {
           name: {
@@ -38,13 +38,20 @@ const getProducts = async (req, res) => {
     }
 
     // Category
-
     if (category && category !== "All") {
       where.category = category;
     }
 
-    // Sorting
+    // Featured Filter
+    if (featured === "true") {
+      where.featured = true;
+    }
 
+    if (featured === "false") {
+      where.featured = false;
+    }
+
+    // Sorting
     let orderBy = {
       createdAt: "desc",
     };
@@ -135,6 +142,12 @@ const getProduct = async (req, res) => {
   try {
     const id = Number(req.params.id);
 
+    if (!id || Number.isNaN(id)) {
+      return res.status(400).json({
+        message: "Invalid product id",
+      });
+    }
+
     const product = await prisma.product.findUnique({
       where: {
         id,
@@ -172,14 +185,20 @@ const createProduct = async (req, res) => {
       featured,
     } = req.body;
 
+    if (!name || !description || !image || price === undefined) {
+      return res.status(400).json({
+        message: "Name, description, image and price are required",
+      });
+    }
+
     const product = await prisma.product.create({
       data: {
-        name,
-        description,
+        name: name.trim(),
+        description: description.trim(),
         image,
         price: Number(price),
         category: category || "Clothing",
-        featured: featured || false,
+        featured: Boolean(featured),
       },
     });
 
@@ -201,6 +220,12 @@ const updateProduct = async (req, res) => {
   try {
     const id = Number(req.params.id);
 
+    if (!id || Number.isNaN(id)) {
+      return res.status(400).json({
+        message: "Invalid product id",
+      });
+    }
+
     const {
       name,
       description,
@@ -220,7 +245,7 @@ const updateProduct = async (req, res) => {
         image,
         price: Number(price),
         category,
-        featured,
+        featured: Boolean(featured),
       },
     });
 
@@ -241,6 +266,12 @@ const updateProduct = async (req, res) => {
 const deleteProduct = async (req, res) => {
   try {
     const id = Number(req.params.id);
+
+    if (!id || Number.isNaN(id)) {
+      return res.status(400).json({
+        message: "Invalid product id",
+      });
+    }
 
     await prisma.product.delete({
       where: {

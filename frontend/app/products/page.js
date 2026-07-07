@@ -38,19 +38,23 @@ export default function ProductsPage() {
     try {
       setLoading(true);
 
-      const params = new URLSearchParams({
-        search,
-        sort,
-        page: currentPage,
-        limit,
-      });
+      const params = new URLSearchParams();
+
+      params.append("search", search);
+      params.append("sort", sort);
+      params.append("page", String(currentPage));
+      params.append("limit", String(limit));
 
       if (category !== "All") {
         params.append("category", category);
       }
 
-      if (featured !== "All") {
-        params.append("featured", featured);
+      if (featured === "true") {
+        params.append("featured", "true");
+      }
+
+      if (featured === "false") {
+        params.append("featured", "false");
       }
 
       const res = await api.get(`/products?${params.toString()}`);

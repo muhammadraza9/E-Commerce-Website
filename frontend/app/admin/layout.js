@@ -1,6 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import {
+  FiGrid,
+  FiShoppingBag,
+  FiPackage,
+  FiUsers,
+  FiSettings,
+  FiArrowLeftCircle,
+} from "react-icons/fi";
 
 export default function AdminLayout({ children }) {
   return (
@@ -12,40 +20,65 @@ export default function AdminLayout({ children }) {
         </h1>
 
         <div className="flex flex-col gap-3">
+
+          {/* Dashboard */}
           <Link
             href="/admin"
-            className="text-white bg-slate-800 px-4 py-3 rounded-lg hover:bg-slate-700 transition-colors"
+            className="flex items-center gap-3 bg-slate-800 text-white px-4 py-3 rounded-lg hover:bg-[#D4AF37] hover:text-black transition-all duration-300"
           >
+            <FiGrid size={20} />
             Dashboard
           </Link>
 
+          {/* Products */}
           <Link
             href="/admin/products"
-            className="text-white bg-slate-800 px-4 py-3 rounded-lg hover:bg-slate-700 transition-colors"
+            className="flex items-center gap-3 bg-slate-800 text-white px-4 py-3 rounded-lg hover:bg-[#D4AF37] hover:text-black transition-all duration-300"
           >
+            <FiShoppingBag size={20} />
             Products
           </Link>
 
+          {/* Orders */}
           <Link
             href="/admin/orders"
-            className="text-white bg-slate-800 px-4 py-3 rounded-lg hover:bg-slate-700 transition-colors"
+            className="flex items-center gap-3 bg-slate-800 text-white px-4 py-3 rounded-lg hover:bg-[#D4AF37] hover:text-black transition-all duration-300"
           >
+            <FiPackage size={20} />
             Orders
           </Link>
 
+          {/* Users */}
           <Link
             href="/admin/users"
-            className="text-white bg-slate-800 px-4 py-3 rounded-lg hover:bg-slate-700 transition-colors"
+            className="flex items-center gap-3 bg-slate-800 text-white px-4 py-3 rounded-lg hover:bg-[#D4AF37] hover:text-black transition-all duration-300"
           >
+            <FiUsers size={20} />
             Users
           </Link>
 
+          {/* Settings */}
+          <Link
+            href="/admin/settings"
+            className="flex items-center gap-3 bg-[#0B1F33] border border-[#D4AF37] text-white px-4 py-3 rounded-lg font-semibold hover:bg-[#D4AF37] hover:text-black transition-all duration-300"
+          >
+            <FiSettings
+              size={20}
+              className="animate-spin"
+              style={{ animationDuration: "8s" }}
+            />
+            Settings
+          </Link>
+
+          {/* Back To Store */}
           <Link
             href="/"
-            className="inline-block mt-8 bg-[#D4AF25] text-white text-center px-6 py-3 rounded-md font-semibold hover:scale-105 transition"
+            className="flex items-center justify-center gap-2 mt-8 bg-[#D4AF37] text-black px-6 py-3 rounded-lg font-bold hover:scale-105 transition-all duration-300"
           >
+            <FiArrowLeftCircle size={20} />
             Back To Store
           </Link>
+
         </div>
       </aside>
 

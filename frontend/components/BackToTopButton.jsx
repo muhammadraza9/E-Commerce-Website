@@ -42,10 +42,10 @@ export default function BackToTopButton() {
     <button
       onClick={scrollToTop}
       aria-label="Back To Top"
-      className="fixed bottom-7 right-7 z-[9999] group"
+      className="fixed bottom-6 right-6 z-[9999] group"
     >
       <div
-        className="relative w-16 h-16 rounded-full p-[3px] transition-all duration-300 group-hover:scale-110 group-hover:shadow-[0_0_30px_rgba(212,175,55,.45)]"
+        className="relative w-12 h-12 rounded-full p-[2px] transition-all duration-300 group-hover:scale-110 group-hover:shadow-[0_0_20px_rgba(212,175,55,.45)]"
         style={{
           background: `conic-gradient(
             #D4AF37 ${progress * 3.6}deg,
@@ -53,7 +53,7 @@ export default function BackToTopButton() {
           )`,
         }}
       >
-        <div className="absolute inset-[3px] rounded-full bg-[#081421] border border-[#D4AF37]/25 flex items-center justify-center transition-all duration-300 group-hover:bg-[#0B1F33]">
+        <div className="absolute inset-[2px] rounded-full bg-[#081421] border border-[#D4AF37]/25 flex items-center justify-center transition-all duration-300 group-hover:bg-[#0B1F33]">
 
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -63,7 +63,7 @@ export default function BackToTopButton() {
             strokeWidth="2.4"
             strokeLinecap="round"
             strokeLinejoin="round"
-            className="w-7 h-7 transition-all duration-300 group-hover:-translate-y-1"
+            className="w-5 h-5 transition-all duration-300 group-hover:-translate-y-0.5"
           >
             <path d="M12 19V5" />
             <path d="M5 12L12 5L19 12" />
