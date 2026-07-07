@@ -16,33 +16,6 @@ const { verifyToken, verifyAdmin } = require("../middleware/authMiddleware");
 router.post("/register", register);
 router.post("/login", login);
 
-// User profile routes
-router.put("/profile", verifyToken, updateProfile);
-router.put("/change-password", verifyToken, changePassword);
-
-// Admin only routes
-router.get("/users", verifyToken, verifyAdmin, getAllUsers);
-router.patch("/users/:id/role", verifyToken, verifyAdmin, updateUserRole);
-router.delete("/users/:id", verifyToken, verifyAdmin, deleteUser);
-
-module.exports = router;const express = require("express");
-const router = express.Router();
-
-const {
-  register,
-  login,
-  getAllUsers,
-  updateUserRole,
-  deleteUser,
-  updateProfile,
-  changePassword,
-} = require("../controllers/authController");
-
-const { verifyToken, verifyAdmin } = require("../middleware/authMiddleware");
-
-router.post("/register", register);
-router.post("/login", login);
-
 router.put("/profile", verifyToken, updateProfile);
 router.put("/change-password", verifyToken, changePassword);
 
