@@ -8,6 +8,9 @@ const authRoutes = require("./routes/authRoutes");
 const reviewRoutes = require("./routes/reviewRoutes");
 const analyticsRoutes = require("./routes/analyticsRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
+const adminSettingRoutes = require("./routes/adminSettingRoutes");
+
+
 
 const app = express();
 
@@ -72,7 +75,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/payment", paymentRoutes);
-
+app.use("/api/admin-settings", adminSettingRoutes);
 /* ===========================
    404
 =========================== */

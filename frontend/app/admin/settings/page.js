@@ -1,17 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import api from "@/services/api";
 import AdminSettingsSkeleton from "@/components/skeletons/AdminSettingsSkeleton";
 import { showSuccessToast, showErrorToast } from "@/utils/toast";
 
 const DEFAULT_SETTINGS = {
-  storeName: "Style Avenue",
-  storeEmail: "support@styleavenue.pk",
-  phoneNumber: "+92 312 6779452",
+  storeName: "",
+  storeEmail: "",
+  phoneNumber: "",
   currency: "PKR",
-  shippingFee: "500",
-  freeShippingLimit: "50000",
-  storeAddress: "Style Avenue, Main Market, Rawalpindi, Punjab, Pakistan",
+  shippingFee: "",
+  freeShippingLimit: "",
+  storeAddress: "",
 };
 
 export default function AdminSettingsPage() {
@@ -20,21 +21,31 @@ export default function AdminSettingsPage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      const savedSettings = localStorage.getItem("storeSettings");
-
-      if (savedSettings) {
-        setSettings({
-          ...DEFAULT_SETTINGS,
-          ...JSON.parse(savedSettings),
-        });
-      }
-
-      setLoading(false);
-    }, 500);
-
-    return () => clearTimeout(timer);
+    fetchSettings();
   }, []);
+
+  const fetchSettings = async () => {
+    try {
+      setLoading(true);
+
+      const res = await api.get("/admin-settings");
+
+      setSettings({
+        storeName: res.data.storeName || "",
+        storeEmail: res.data.storeEmail || "",
+        phoneNumber: res.data.phoneNumber || "",
+        currency: res.data.currency || "PKR",
+        shippingFee: res.data.shippingFee || "",
+        freeShippingLimit: res.data.freeShippingLimit || "",
+        storeAddress: res.data.storeAddress || "",
+      });
+    } catch (error) {
+      console.log(error);
+      showErrorToast("Failed to load admin settings");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -45,7 +56,7 @@ export default function AdminSettingsPage() {
     }));
   };
 
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault();
 
     if (!settings.storeName.trim()) {
@@ -66,28 +77,19 @@ export default function AdminSettingsPage() {
     try {
       setSaving(true);
 
-      localStorage.setItem("storeSettings", JSON.stringify(settings));
+      const res = await api.put("/admin-settings", settings);
 
-      window.dispatchEvent(new Event("storeSettingsChange"));
+      setSettings(res.data.settings);
 
-      showSuccessToast("Store settings saved successfully");
+      showSuccessToast("Admin settings saved successfully");
     } catch (error) {
       console.log(error);
-      showErrorToast("Failed to save settings");
+      showErrorToast(
+        error?.response?.data?.message || "Failed to save admin settings"
+      );
     } finally {
-      setTimeout(() => {
-        setSaving(false);
-      }, 500);
+      setSaving(false);
     }
-  };
-
-  const handleReset = () => {
-    if (!confirm("Reset settings to default values?")) return;
-
-    localStorage.setItem("storeSettings", JSON.stringify(DEFAULT_SETTINGS));
-    setSettings(DEFAULT_SETTINGS);
-    window.dispatchEvent(new Event("storeSettingsChange"));
-    showSuccessToast("Settings reset successfully");
   };
 
   if (loading) {
@@ -102,11 +104,11 @@ export default function AdminSettingsPage() {
         </p>
 
         <h1 className="text-3xl sm:text-4xl font-bold text-white">
-          Store <span className="text-[#D4AF37]">Settings</span>
+          Admin <span className="text-[#D4AF37]">Settings</span>
         </h1>
 
         <p className="text-gray-400 text-sm mt-2">
-          Manage your store details, shipping charges and business information.
+          These settings are saved in database and available across all devices.
         </p>
       </div>
 
@@ -140,7 +142,6 @@ export default function AdminSettingsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           <div>
             <label className="block text-white mb-2">Store Name</label>
-
             <input
               type="text"
               name="storeName"
@@ -153,7 +154,6 @@ export default function AdminSettingsPage() {
 
           <div>
             <label className="block text-white mb-2">Store Email</label>
-
             <input
               type="email"
               name="storeEmail"
@@ -166,7 +166,6 @@ export default function AdminSettingsPage() {
 
           <div>
             <label className="block text-white mb-2">Phone Number</label>
-
             <input
               type="text"
               name="phoneNumber"
@@ -179,7 +178,6 @@ export default function AdminSettingsPage() {
 
           <div>
             <label className="block text-white mb-2">Currency</label>
-
             <select
               name="currency"
               value={settings.currency}
@@ -195,7 +193,6 @@ export default function AdminSettingsPage() {
 
           <div>
             <label className="block text-white mb-2">Shipping Fee</label>
-
             <input
               type="number"
               name="shippingFee"
@@ -210,7 +207,6 @@ export default function AdminSettingsPage() {
             <label className="block text-white mb-2">
               Free Shipping Limit
             </label>
-
             <input
               type="number"
               name="freeShippingLimit"
@@ -223,7 +219,6 @@ export default function AdminSettingsPage() {
 
           <div className="md:col-span-2">
             <label className="block text-white mb-2">Store Address</label>
-
             <textarea
               name="storeAddress"
               value={settings.storeAddress}
@@ -234,23 +229,13 @@ export default function AdminSettingsPage() {
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-3 mt-6">
-          <button
-            type="submit"
-            disabled={saving}
-            className="bg-[#D4AF37] text-black px-6 py-3 rounded-xl font-semibold hover:bg-yellow-400 transition disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {saving ? "Saving..." : "Save Settings"}
-          </button>
-
-          <button
-            type="button"
-            onClick={handleReset}
-            className="border border-slate-600 text-gray-300 px-6 py-3 rounded-xl font-semibold hover:border-red-500 hover:text-red-400 transition"
-          >
-            Reset Default
-          </button>
-        </div>
+        <button
+          type="submit"
+          disabled={saving}
+          className="mt-6 bg-[#D4AF37] text-black px-6 py-3 rounded-xl font-semibold hover:bg-yellow-400 transition disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {saving ? "Saving..." : "Save Admin Settings"}
+        </button>
       </form>
     </div>
   );
