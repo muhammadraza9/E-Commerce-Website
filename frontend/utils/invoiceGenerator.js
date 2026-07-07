@@ -1,5 +1,15 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import api from "@/services/api";
+
+const DEFAULT_SETTINGS = {
+  storeName: "Style Avenue",
+  storeEmail: "support@styleavenue.pk",
+  phoneNumber: "+92 312 6779452",
+  storeAddress: "Style Avenue, Main Market, Rawalpindi, Punjab, Pakistan",
+  shippingFee: 0,
+  taxPercentage: 0,
+};
 
 const formatCurrency = (amount) => {
   return `Rs ${Number(amount || 0).toLocaleString("en-PK")}`;
@@ -15,11 +25,25 @@ const formatDate = (date) => {
   });
 };
 
-export const generateInvoicePDF = (order, type = "user") => {
+const getSettings = async () => {
+  try {
+    const res = await api.get("/admin-settings");
+    return {
+      ...DEFAULT_SETTINGS,
+      ...res.data,
+    };
+  } catch (error) {
+    console.log("Invoice settings load failed:", error);
+    return DEFAULT_SETTINGS;
+  }
+};
+
+export const generateInvoicePDF = async (order, type = "user") => {
   if (!order) return;
 
-  const isAdmin = type === "admin";
+  const settings = await getSettings();
 
+  const isAdmin = type === "admin";
   const doc = new jsPDF("p", "mm", "a4");
 
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -36,7 +60,7 @@ export const generateInvoicePDF = (order, type = "user") => {
   doc.setTextColor(...gold);
   doc.setFontSize(24);
   doc.setFont("helvetica", "bold");
-  doc.text("STYLE AVENUE", 14, 17);
+  doc.text(settings.storeName.toUpperCase(), 14, 17);
 
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(10);
@@ -52,7 +76,7 @@ export const generateInvoicePDF = (order, type = "user") => {
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
-  doc.text(`Invoice No: SA-${order.id}`, pageWidth - 14, 25, {
+  doc.text(`Invoice No: ${settings.orderPrefix || "SA"}-${order.id}`, pageWidth - 14, 25, {
     align: "right",
   });
   doc.text(`Tracking: ${order.trackingId || "N/A"}`, pageWidth - 14, 32, {
@@ -176,11 +200,13 @@ export const generateInvoicePDF = (order, type = "user") => {
       return sum + Number(item.price || 0) * Number(item.quantity || 1);
     }, 0) || 0;
 
-  const shipping = Number(order.shippingFee || 0);
-  const grandTotal = Number(order.total || subtotal + shipping || 0);
+  const grandTotal = Number(order.total || subtotal);
+  const taxPercentage = Number(settings.taxPercentage || 0);
+  const taxAmount = Math.round((subtotal * taxPercentage) / 100);
+  const shipping = Math.max(grandTotal - subtotal - taxAmount, 0);
 
   doc.setFillColor(...lightGray);
-  doc.roundedRect(120, finalY - 4, 76, 38, 3, 3, "F");
+  doc.roundedRect(120, finalY - 4, 76, 46, 3, 3, "F");
 
   doc.setTextColor(...darkText);
   doc.setFontSize(10);
@@ -192,14 +218,17 @@ export const generateInvoicePDF = (order, type = "user") => {
   doc.text("Shipping", 126, finalY + 12);
   doc.text(formatCurrency(shipping), 190, finalY + 12, { align: "right" });
 
+  doc.text(`Tax (${taxPercentage}%)`, 126, finalY + 20);
+  doc.text(formatCurrency(taxAmount), 190, finalY + 20, { align: "right" });
+
   doc.setDrawColor(210, 210, 210);
-  doc.line(126, finalY + 17, 190, finalY + 17);
+  doc.line(126, finalY + 25, 190, finalY + 25);
 
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...gold);
   doc.setFontSize(12);
-  doc.text("Grand Total", 126, finalY + 27);
-  doc.text(formatCurrency(grandTotal), 190, finalY + 27, { align: "right" });
+  doc.text("Grand Total", 126, finalY + 35);
+  doc.text(formatCurrency(grandTotal), 190, finalY + 35, { align: "right" });
 
   doc.setTextColor(90, 90, 90);
   doc.setFontSize(9);
@@ -210,28 +239,34 @@ export const generateInvoicePDF = (order, type = "user") => {
       ? "Admin copy: This invoice includes customer and payment information."
       : "Customer copy: Please keep this invoice for your order record.",
     14,
-    finalY + 48
+    finalY + 56
   );
 
   doc.text(
     "Note: This invoice is computer generated and does not require a signature.",
     14,
-    finalY + 55
+    finalY + 63
   );
 
   doc.setDrawColor(...gold);
-  doc.line(14, pageHeight - 22, pageWidth - 14, pageHeight - 22);
+  doc.line(14, pageHeight - 25, pageWidth - 14, pageHeight - 25);
 
   doc.setTextColor(...darkText);
   doc.setFontSize(9);
-  doc.text("Thank you for shopping with Style Avenue.", 14, pageHeight - 14);
+  doc.text(`Thank you for shopping with ${settings.storeName}.`, 14, pageHeight - 17);
 
   doc.setTextColor(100, 100, 100);
-  doc.text("raza@styleavenue.pk | www.styleavenue.pk", 14, pageHeight - 8);
+  doc.text(
+    `${settings.storeEmail} | ${settings.phoneNumber}`,
+    14,
+    pageHeight - 11
+  );
+
+  doc.text(settings.storeAddress || "", 14, pageHeight - 6);
 
   doc.save(
-    `Style-Avenue-${isAdmin ? "Admin" : "Invoice"}-${
-      order.trackingId || order.id
-    }.pdf`
+    `${settings.storeName.replace(/\s+/g, "-")}-${
+      isAdmin ? "Admin" : "Invoice"
+    }-${order.trackingId || order.id}.pdf`
   );
 };

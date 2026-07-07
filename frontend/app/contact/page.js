@@ -2,12 +2,24 @@
 
 import { useEffect, useState } from "react";
 import emailjs from "@emailjs/browser";
+import api from "@/services/api";
 import ContactSkeleton from "@/components/skeletons/ContactSkeleton";
 import { showSuccessToast, showErrorToast } from "@/utils/toast";
 
 const EMAILJS_SERVICE_ID = "service_si7x6yg";
 const EMAILJS_TEMPLATE_ID = "template_piobd0l";
 const EMAILJS_PUBLIC_KEY = "I3kmaWk4nlrKIj1RS";
+
+const DEFAULT_SETTINGS = {
+  storeName: "Style Avenue",
+  storeEmail: "info@styleavenue.pk",
+  phoneNumber: "+92 312 6779452",
+  whatsappNumber: "+92 312 6779452",
+  storeAddress: "Style Avenue, Main Market, Rawalpindi, Punjab, Pakistan",
+  supportHours: "Monday - Saturday: 10:00 AM - 9:00 PM",
+  instagramUrl: "",
+  facebookUrl: "",
+};
 
 export default function Contact() {
   const [formData, setFormData] = useState({
@@ -16,16 +28,30 @@ export default function Contact() {
     message: "",
   });
 
+  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [status, setStatus] = useState("idle");
   const [pageLoading, setPageLoading] = useState(true);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setPageLoading(false);
-    }, 500);
-
-    return () => clearTimeout(timer);
+    fetchSettings();
   }, []);
+
+  const fetchSettings = async () => {
+    try {
+      setPageLoading(true);
+
+      const res = await api.get("/admin-settings");
+
+      setSettings({
+        ...DEFAULT_SETTINGS,
+        ...res.data,
+      });
+    } catch (error) {
+      console.log("Contact settings load failed:", error);
+    } finally {
+      setPageLoading(false);
+    }
+  };
 
   const handleChange = (e) => {
     setFormData((prev) => ({
@@ -56,9 +82,7 @@ export default function Contact() {
         message: "",
       });
 
-      showSuccessToast(
-        "Message sent successfully! We'll get back to you shortly."
-      );
+      showSuccessToast("Message sent successfully!");
     } catch (err) {
       console.error("EmailJS Error:", err);
       showErrorToast(err?.text || "Something went wrong. Please try again.");
@@ -97,9 +121,9 @@ export default function Contact() {
           </h1>
 
           <p className="mt-4 text-gray-200 max-w-xl">
-            Have a question? We'd love to hear from you.{" "}
+            Have a question? We&apos;d love to hear from you.{" "}
             <span className="text-[#D4AF37]">
-              Send us a message and we'll
+              Send us a message and we&apos;ll
             </span>{" "}
             respond as soon as possible.
           </p>
@@ -158,64 +182,82 @@ export default function Contact() {
             Store Information
           </h2>
 
-          <div className="flex gap-4">
-            <span className="text-3xl">📍</span>
+          <InfoItem icon="📍" title="Address" text={settings.storeAddress} />
 
-            <div>
-              <h3 className="text-white font-semibold text-lg">Address</h3>
-              <p className="text-gray-400 mt-1">
-                Style Avenue, Main Market, Rawalpindi, Punjab, Pakistan
-              </p>
+          <InfoItem
+            icon="📞"
+            title="Phone / WhatsApp"
+            text={`${settings.phoneNumber}${
+              settings.whatsappNumber
+                ? ` / WhatsApp: ${settings.whatsappNumber}`
+                : ""
+            }`}
+          />
+
+          <InfoItem icon="📧" title="Email" text={settings.storeEmail} />
+
+          <InfoItem icon="🕒" title="Support Hours" text={settings.supportHours} />
+
+          {(settings.instagramUrl || settings.facebookUrl) && (
+            <div className="flex gap-4">
+              <span className="text-3xl">🌐</span>
+
+              <div>
+                <h3 className="text-white font-semibold text-lg">Social Links</h3>
+
+                <div className="flex gap-4 mt-2">
+                  {settings.instagramUrl && (
+                    <a
+                      href={settings.instagramUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[#D4AF37] hover:text-white transition"
+                    >
+                      Instagram
+                    </a>
+                  )}
+
+                  {settings.facebookUrl && (
+                    <a
+                      href={settings.facebookUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[#D4AF37] hover:text-white transition"
+                    >
+                      Facebook
+                    </a>
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
-
-          <div className="flex gap-4">
-            <span className="text-3xl">📞</span>
-
-            <div>
-              <h3 className="text-white font-semibold text-lg">
-                Phone / WhatsApp
-              </h3>
-              <p className="text-gray-400 mt-1">+92 312 6779452</p>
-            </div>
-          </div>
-
-          <div className="flex gap-4">
-            <span className="text-3xl">📧</span>
-
-            <div>
-              <h3 className="text-white font-semibold text-lg">Email</h3>
-              <p className="text-gray-400 mt-1">info@styleavenue.pk</p>
-            </div>
-          </div>
-
-          <div className="flex gap-4">
-            <span className="text-3xl">🕒</span>
-
-            <div>
-              <h3 className="text-white font-semibold text-lg">
-                Store Hours
-              </h3>
-              <p className="text-gray-400 mt-1">
-                Monday – Saturday: 10:00 AM – 9:00 PM
-              </p>
-              <p className="text-gray-400">Sunday: 12:00 PM – 6:00 PM</p>
-            </div>
-          </div>
+          )}
 
           <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 mt-4">
             <h3 className="text-[#D4AF37] text-xl font-bold mb-3">
-              Why Contact Us?
+              Why Contact {settings.storeName}?
             </h3>
 
             <p className="text-gray-400 leading-7">
-              We're always happy to help with orders, returns, product
+              We&apos;re always happy to help with orders, returns, product
               information, or any questions you may have. Our support team is
               committed to providing you with the best shopping experience.
             </p>
           </div>
         </div>
       </section>
+    </div>
+  );
+}
+
+function InfoItem({ icon, title, text }) {
+  return (
+    <div className="flex gap-4">
+      <span className="text-3xl">{icon}</span>
+
+      <div>
+        <h3 className="text-white font-semibold text-lg">{title}</h3>
+        <p className="text-gray-400 mt-1">{text || "Not Available"}</p>
+      </div>
     </div>
   );
 }

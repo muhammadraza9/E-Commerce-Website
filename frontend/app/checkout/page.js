@@ -7,6 +7,14 @@ import { CartContext } from "@/context/CartContext";
 import CheckoutSkeleton from "@/components/skeletons/CheckoutSkeleton";
 import { showSuccessToast, showErrorToast } from "@/utils/toast";
 
+const DEFAULT_SETTINGS = {
+  shippingFee: 0,
+  freeShippingLimit: 0,
+  taxPercentage: 0,
+  codEnabled: true,
+  freeShippingEnabled: true,
+};
+
 export default function CheckoutPage() {
   const router = useRouter();
 
@@ -15,6 +23,7 @@ export default function CheckoutPage() {
 
   const itemsToCheckout = checkoutItems.length > 0 ? checkoutItems : cart;
 
+  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(false);
   const [orderPlaced, setOrderPlaced] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
@@ -28,33 +37,71 @@ export default function CheckoutPage() {
   });
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      const storedUser = localStorage.getItem("user");
-      const token = localStorage.getItem("token");
+    const initCheckout = async () => {
+      try {
+        const storedUser = localStorage.getItem("user");
+        const token = localStorage.getItem("token");
 
-      if (!storedUser || !token) {
-        showErrorToast("Please sign in to place an order");
-        router.push("/signin");
-        return;
+        if (!storedUser || !token) {
+          showErrorToast("Please sign in to place an order");
+          router.push("/signin");
+          return;
+        }
+
+        const userData = JSON.parse(storedUser);
+
+        setFormData((prev) => ({
+          ...prev,
+          name: userData.username || userData.name || prev.name,
+          email: userData.email || prev.email,
+        }));
+
+        const res = await api.get("/admin-settings");
+
+        setSettings({
+          ...DEFAULT_SETTINGS,
+          ...res.data,
+        });
+      } catch (error) {
+        console.log(error);
+        setSettings(DEFAULT_SETTINGS);
+      } finally {
+        setCheckingAuth(false);
       }
+    };
 
-      const userData = JSON.parse(storedUser);
-
-      setFormData((prev) => ({
-        ...prev,
-        name: userData.username || userData.name || prev.name,
-        email: userData.email || prev.email,
-      }));
-
-      setCheckingAuth(false);
-    }, 500);
-
-    return () => clearTimeout(timer);
+    initCheckout();
   }, [router]);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
+
+  const subtotal = itemsToCheckout.reduce(
+    (sum, item) => sum + item.price * item.quantity,
+    0
+  );
+
+  const shippingFee = Number(settings.shippingFee || 0);
+  const freeShippingLimit = Number(settings.freeShippingLimit || 0);
+  const taxPercentage = Number(settings.taxPercentage || 0);
+
+  const isFreeShipping =
+    settings.freeShippingEnabled &&
+    freeShippingLimit > 0 &&
+    subtotal >= freeShippingLimit;
+
+  const finalShipping = isFreeShipping ? 0 : shippingFee;
+  const taxAmount = Math.round((subtotal * taxPercentage) / 100);
+  const grandTotal = subtotal + finalShipping + taxAmount;
+
+  const paymentMethods = [
+    ...(settings.codEnabled
+      ? [{ id: "COD", label: "Cash On Delivery" }]
+      : []),
+    { id: "JAZZCASH", label: "JazzCash" },
+    { id: "EASYPAISA", label: "EasyPaisa" },
+  ];
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -81,18 +128,13 @@ export default function CheckoutPage() {
     try {
       setLoading(true);
 
-      const total = itemsToCheckout.reduce(
-        (sum, item) => sum + item.price * item.quantity,
-        0
-      );
-
       const orderData = {
         customer: formData.name,
         email: formData.email,
         phone: formData.phone,
         address: formData.address,
         paymentMethod: formData.paymentMethod,
-        total,
+        total: grandTotal,
         items: itemsToCheckout.map((item) => ({
           productId: item.id,
           quantity: item.quantity,
@@ -112,7 +154,7 @@ export default function CheckoutPage() {
 
       setTimeout(() => {
         router.push("/order-success");
-      }, 1500);
+      }, 1200);
     } catch (error) {
       console.log(error);
 
@@ -126,11 +168,6 @@ export default function CheckoutPage() {
       setLoading(false);
     }
   };
-
-  const total = itemsToCheckout.reduce(
-    (sum, item) => sum + item.price * item.quantity,
-    0
-  );
 
   const isFormComplete =
     formData.name.trim() !== "" &&
@@ -207,14 +244,26 @@ export default function CheckoutPage() {
               ))}
             </div>
 
-            <div
-              className="mt-4 pt-4 flex justify-between items-center"
-              style={{ borderTop: "1px solid rgba(212,175,55,0.2)" }}
-            >
-              <span className="text-white font-semibold">Total</span>
-              <span className="text-[#D4AF37] font-bold text-lg">
-                Rs {total}
-              </span>
+            <div className="mt-5 pt-4 space-y-3 border-t border-[#D4AF37]/20">
+              <SummaryRow label="Subtotal" value={`Rs ${subtotal}`} />
+
+              <SummaryRow
+                label="Shipping"
+                value={isFreeShipping ? "Free" : `Rs ${finalShipping}`}
+                highlight={isFreeShipping}
+              />
+
+              <SummaryRow
+                label={`Tax (${taxPercentage}%)`}
+                value={`Rs ${taxAmount}`}
+              />
+
+              <div className="pt-3 flex justify-between items-center border-t border-slate-700">
+                <span className="text-white font-bold">Grand Total</span>
+                <span className="text-[#D4AF37] font-bold text-xl">
+                  Rs {grandTotal}
+                </span>
+              </div>
             </div>
           </div>
         )}
@@ -227,44 +276,26 @@ export default function CheckoutPage() {
             borderColor: "rgba(212,175,55,0.25)",
           }}
         >
-          <input
+          <Input
             name="name"
             placeholder="Full Name"
             value={formData.name}
-            className="w-full border text-white placeholder-gray-400 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
-            style={{
-              backgroundColor: "rgba(10,22,40,0.8)",
-              borderColor: "rgba(212,175,55,0.2)",
-            }}
             onChange={handleChange}
-            required
           />
 
-          <input
+          <Input
             name="email"
             type="email"
             placeholder="Email"
             value={formData.email}
-            className="w-full border text-white placeholder-gray-400 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
-            style={{
-              backgroundColor: "rgba(10,22,40,0.8)",
-              borderColor: "rgba(212,175,55,0.2)",
-            }}
             onChange={handleChange}
-            required
           />
 
-          <input
+          <Input
             name="phone"
             placeholder="Phone Number"
             value={formData.phone}
-            className="w-full border text-white placeholder-gray-400 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
-            style={{
-              backgroundColor: "rgba(10,22,40,0.8)",
-              borderColor: "rgba(212,175,55,0.2)",
-            }}
             onChange={handleChange}
-            required
           />
 
           <textarea
@@ -287,11 +318,7 @@ export default function CheckoutPage() {
             </label>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {[
-                { id: "COD", label: "Cash On Delivery" },
-                { id: "JAZZCASH", label: "JazzCash" },
-                { id: "EASYPAISA", label: "EasyPaisa" },
-              ].map((method) => (
+              {paymentMethods.map((method) => (
                 <label
                   key={method.id}
                   className="flex items-center gap-2 border rounded-xl p-4 cursor-pointer transition-colors"
@@ -329,10 +356,43 @@ export default function CheckoutPage() {
             disabled={loading || !isFormComplete}
             className="w-full py-3 rounded-xl font-semibold transition-all duration-300 cursor-pointer bg-[#D4AF37] text-[#0a1628] disabled:opacity-40 disabled:cursor-not-allowed disabled:scale-100 enabled:hover:scale-[1.02]"
           >
-            {loading ? "Placing Order..." : "Place Order"}
+            {loading ? "Placing Order..." : `Place Order - Rs ${grandTotal}`}
           </button>
         </form>
       </div>
+    </div>
+  );
+}
+
+function Input({ name, value, onChange, placeholder, type = "text" }) {
+  return (
+    <input
+      name={name}
+      type={type}
+      placeholder={placeholder}
+      value={value}
+      className="w-full border text-white placeholder-gray-400 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
+      style={{
+        backgroundColor: "rgba(10,22,40,0.8)",
+        borderColor: "rgba(212,175,55,0.2)",
+      }}
+      onChange={onChange}
+      required
+    />
+  );
+}
+
+function SummaryRow({ label, value, highlight = false }) {
+  return (
+    <div className="flex justify-between items-center text-sm">
+      <span className="text-gray-300">{label}</span>
+      <span
+        className={`font-semibold ${
+          highlight ? "text-green-400" : "text-gray-200"
+        }`}
+      >
+        {value}
+      </span>
     </div>
   );
 }
