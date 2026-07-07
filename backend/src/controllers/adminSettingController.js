@@ -9,6 +9,18 @@ const DEFAULT_SETTINGS = {
   shippingFee: 500,
   freeShippingLimit: 50000,
   storeAddress: "Style Avenue, Main Market, Rawalpindi, Punjab, Pakistan",
+
+  storeLogoUrl: "",
+  whatsappNumber: "+92 312 6779452",
+  instagramUrl: "",
+  facebookUrl: "",
+  supportHours: "Monday - Saturday: 10:00 AM - 9:00 PM",
+  taxPercentage: 0,
+  codEnabled: true,
+  freeShippingEnabled: true,
+  orderPrefix: "SA",
+  lowStockAlertLimit: 5,
+  maintenanceMode: false,
 };
 
 exports.getAdminSettings = async (req, res) => {
@@ -42,6 +54,17 @@ exports.updateAdminSettings = async (req, res) => {
       shippingFee,
       freeShippingLimit,
       storeAddress,
+      storeLogoUrl,
+      whatsappNumber,
+      instagramUrl,
+      facebookUrl,
+      supportHours,
+      taxPercentage,
+      codEnabled,
+      freeShippingEnabled,
+      orderPrefix,
+      lowStockAlertLimit,
+      maintenanceMode,
     } = req.body;
 
     if (!storeName || !storeEmail || !phoneNumber || !currency) {
@@ -52,24 +75,50 @@ exports.updateAdminSettings = async (req, res) => {
 
     const settings = await prisma.adminsetting.upsert({
       where: { id: 1 },
+
       update: {
-        storeName,
-        storeEmail,
-        phoneNumber,
+        storeName: storeName.trim(),
+        storeEmail: storeEmail.trim(),
+        phoneNumber: phoneNumber.trim(),
         currency,
         shippingFee: Number(shippingFee || 0),
         freeShippingLimit: Number(freeShippingLimit || 0),
-        storeAddress,
+        storeAddress: storeAddress || "",
+
+        storeLogoUrl: storeLogoUrl || "",
+        whatsappNumber: whatsappNumber || "",
+        instagramUrl: instagramUrl || "",
+        facebookUrl: facebookUrl || "",
+        supportHours: supportHours || "",
+        taxPercentage: Number(taxPercentage || 0),
+        codEnabled: Boolean(codEnabled),
+        freeShippingEnabled: Boolean(freeShippingEnabled),
+        orderPrefix: orderPrefix || "SA",
+        lowStockAlertLimit: Number(lowStockAlertLimit || 5),
+        maintenanceMode: Boolean(maintenanceMode),
       },
+
       create: {
         id: 1,
-        storeName,
-        storeEmail,
-        phoneNumber,
+        storeName: storeName.trim(),
+        storeEmail: storeEmail.trim(),
+        phoneNumber: phoneNumber.trim(),
         currency,
         shippingFee: Number(shippingFee || 0),
         freeShippingLimit: Number(freeShippingLimit || 0),
-        storeAddress,
+        storeAddress: storeAddress || "",
+
+        storeLogoUrl: storeLogoUrl || "",
+        whatsappNumber: whatsappNumber || "",
+        instagramUrl: instagramUrl || "",
+        facebookUrl: facebookUrl || "",
+        supportHours: supportHours || "",
+        taxPercentage: Number(taxPercentage || 0),
+        codEnabled: Boolean(codEnabled),
+        freeShippingEnabled: Boolean(freeShippingEnabled),
+        orderPrefix: orderPrefix || "SA",
+        lowStockAlertLimit: Number(lowStockAlertLimit || 5),
+        maintenanceMode: Boolean(maintenanceMode),
       },
     });
 

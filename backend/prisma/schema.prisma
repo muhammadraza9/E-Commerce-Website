@@ -85,14 +85,27 @@ model review {
 }
 
 model adminsetting {
-  id                Int      @id @default(1)
-  storeName         String   @default("Style Avenue")
-  storeEmail        String   @default("support@styleavenue.pk")
-  phoneNumber       String   @default("+92 312 6779452")
-  currency          String   @default("PKR")
-  shippingFee       Float    @default(500)
-  freeShippingLimit Float    @default(50000)
-  storeAddress      String   @db.Text
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id                 Int      @id @default(1)
+  storeName          String   @default("Style Avenue")
+  storeEmail         String   @default("support@styleavenue.pk")
+  phoneNumber        String   @default("+92 312 6779452")
+  currency           String   @default("PKR")
+  shippingFee        Float    @default(500)
+  freeShippingLimit  Float    @default(50000)
+  storeAddress       String   @db.Text
+
+  storeLogoUrl       String?  @db.LongText
+  whatsappNumber     String?
+  instagramUrl       String?  @db.LongText
+  facebookUrl        String?  @db.LongText
+  supportHours       String   @default("Monday - Saturday: 10:00 AM - 9:00 PM")
+  taxPercentage      Float    @default(0)
+  codEnabled         Boolean  @default(true)
+  freeShippingEnabled Boolean @default(true)
+  orderPrefix        String   @default("SA")
+  lowStockAlertLimit Int      @default(5)
+  maintenanceMode    Boolean  @default(false)
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 }
