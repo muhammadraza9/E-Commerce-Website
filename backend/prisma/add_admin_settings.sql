@@ -11,52 +11,46 @@ CREATE TABLE IF NOT EXISTS `adminsetting` (
 
   `storeAddress` TEXT NOT NULL,
 
-  `storeLogoUrl` LONGTEXT NULL,
-  `whatsappNumber` VARCHAR(191) NULL,
-  `instagramUrl` LONGTEXT NULL,
-  `facebookUrl` LONGTEXT NULL,
-
-  `supportHours` VARCHAR(191) NOT NULL DEFAULT 'Monday - Saturday: 10:00 AM - 9:00 PM',
-
-  `taxPercentage` DOUBLE NOT NULL DEFAULT 0,
-
-  `codEnabled` BOOLEAN NOT NULL DEFAULT TRUE,
-
-  `freeShippingEnabled` BOOLEAN NOT NULL DEFAULT TRUE,
-
-  `orderPrefix` VARCHAR(191) NOT NULL DEFAULT 'SA',
-
-  `lowStockAlertLimit` INT NOT NULL DEFAULT 5,
-
-  `maintenanceMode` BOOLEAN NOT NULL DEFAULT FALSE,
-
   `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-
-  `updatedAt` DATETIME(3)
-  NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
-  ON UPDATE CURRENT_TIMESTAMP(3),
+  `updatedAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
 
   PRIMARY KEY (`id`)
 );
 
+ALTER TABLE `adminsetting`
+ADD COLUMN `storeLogoUrl` LONGTEXT NULL,
+ADD COLUMN `whatsappNumber` VARCHAR(191) NULL,
+ADD COLUMN `instagramUrl` LONGTEXT NULL,
+ADD COLUMN `facebookUrl` LONGTEXT NULL,
+ADD COLUMN `supportHours` VARCHAR(191) NOT NULL DEFAULT 'Monday - Saturday: 10:00 AM - 9:00 PM',
+ADD COLUMN `taxPercentage` DOUBLE NOT NULL DEFAULT 0,
+ADD COLUMN `codEnabled` BOOLEAN NOT NULL DEFAULT TRUE,
+ADD COLUMN `freeShippingEnabled` BOOLEAN NOT NULL DEFAULT TRUE,
+ADD COLUMN `orderPrefix` VARCHAR(191) NOT NULL DEFAULT 'SA',
+ADD COLUMN `lowStockAlertLimit` INT NOT NULL DEFAULT 5,
+ADD COLUMN `maintenanceMode` BOOLEAN NOT NULL DEFAULT FALSE;
+
 INSERT INTO `adminsetting`
 (
-  id,
-  storeName,
-  storeEmail,
-  phoneNumber,
-  currency,
-  shippingFee,
-  freeShippingLimit,
-  storeAddress,
-  whatsappNumber,
-  supportHours,
-  taxPercentage,
-  codEnabled,
-  freeShippingEnabled,
-  orderPrefix,
-  lowStockAlertLimit,
-  maintenanceMode
+  `id`,
+  `storeName`,
+  `storeEmail`,
+  `phoneNumber`,
+  `currency`,
+  `shippingFee`,
+  `freeShippingLimit`,
+  `storeAddress`,
+  `storeLogoUrl`,
+  `whatsappNumber`,
+  `instagramUrl`,
+  `facebookUrl`,
+  `supportHours`,
+  `taxPercentage`,
+  `codEnabled`,
+  `freeShippingEnabled`,
+  `orderPrefix`,
+  `lowStockAlertLimit`,
+  `maintenanceMode`
 )
 VALUES
 (
@@ -68,7 +62,10 @@ VALUES
   500,
   50000,
   'Style Avenue, Main Market, Rawalpindi, Punjab, Pakistan',
+  '',
   '+92 312 6779452',
+  '',
+  '',
   'Monday - Saturday: 10:00 AM - 9:00 PM',
   0,
   TRUE,
@@ -78,4 +75,4 @@ VALUES
   FALSE
 )
 ON DUPLICATE KEY UPDATE
-storeName = VALUES(storeName);
+  `id` = `id`;
