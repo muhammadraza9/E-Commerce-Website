@@ -7,6 +7,8 @@ const baseStyle = {
   boxShadow: "0 8px 24px rgba(212,175,55,0.15)",
 };
 
+const TOAST_DURATION = 1000; // 1 Second
+
 export const showSuccessToast = (message) => {
   toast(
     <div className="flex items-center gap-2">
@@ -15,11 +17,16 @@ export const showSuccessToast = (message) => {
     </div>,
     {
       position: "top-right",
-      autoClose: 2000,
+      autoClose: TOAST_DURATION,
       closeButton: false,
       icon: false,
+      hideProgressBar: false,
+      pauseOnHover: false,
+      draggable: false,
       style: baseStyle,
-      progressStyle: { background: "#D4AF37" },
+      progressStyle: {
+        background: "#D4AF37",
+      },
     }
   );
 };
@@ -32,11 +39,19 @@ export const showErrorToast = (message) => {
     </div>,
     {
       position: "top-right",
-      autoClose: 2500,
+      autoClose: TOAST_DURATION,
       closeButton: false,
       icon: false,
-      style: { ...baseStyle, border: "1px solid #ef4444" },
-      progressStyle: { background: "#ef4444" },
+      hideProgressBar: false,
+      pauseOnHover: false,
+      draggable: false,
+      style: {
+        ...baseStyle,
+        border: "1px solid #ef4444",
+      },
+      progressStyle: {
+        background: "#ef4444",
+      },
     }
   );
 };
@@ -49,11 +64,19 @@ export const showInfoToast = (message) => {
     </div>,
     {
       position: "top-right",
-      autoClose: 2000,
+      autoClose: TOAST_DURATION,
       closeButton: false,
       icon: false,
-      style: { ...baseStyle, border: "1px solid #60a5fa" },
-      progressStyle: { background: "#60a5fa" },
+      hideProgressBar: false,
+      pauseOnHover: false,
+      draggable: false,
+      style: {
+        ...baseStyle,
+        border: "1px solid #60a5fa",
+      },
+      progressStyle: {
+        background: "#60a5fa",
+      },
     }
   );
 };
@@ -66,20 +89,29 @@ export const showCartToast = (product) => {
         alt={product.name}
         className="w-12 h-12 object-cover rounded-md border border-[#D4AF37]/50"
       />
+
       <div>
         <p className="text-white font-semibold text-sm leading-tight">
           {product.name}
         </p>
-        <p className="text-[#D4AF37] text-xs mt-0.5">✓ Added to cart</p>
+
+        <p className="text-[#D4AF37] text-xs mt-0.5">
+          ✓ Added to cart
+        </p>
       </div>
     </div>,
     {
       position: "top-right",
-      autoClose: 2000,
+      autoClose: TOAST_DURATION,
       closeButton: false,
       icon: false,
+      hideProgressBar: false,
+      pauseOnHover: false,
+      draggable: false,
       style: baseStyle,
-      progressStyle: { background: "#D4AF37" },
+      progressStyle: {
+        background: "#D4AF37",
+      },
     }
   );
 };

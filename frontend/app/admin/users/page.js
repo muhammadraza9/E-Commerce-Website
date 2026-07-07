@@ -8,6 +8,9 @@ import AdminUsersSkeleton from "@/components/skeletons/AdminUsersSkeleton";
 export default function AdminUsersPage() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [roleUpdatingId, setRoleUpdatingId] = useState(null);
+  const [deleteLoadingId, setDeleteLoadingId] = useState(null);
+
   const [currentUserId, setCurrentUserId] = useState(null);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("All");
@@ -16,7 +19,8 @@ export default function AdminUsersPage() {
     const storedUser = localStorage.getItem("user");
 
     if (storedUser) {
-      setCurrentUserId(JSON.parse(storedUser).id);
+      const parsedUser = JSON.parse(storedUser);
+      setCurrentUserId(Number(parsedUser.id));
     }
 
     fetchUsers();
@@ -24,41 +28,95 @@ export default function AdminUsersPage() {
 
   const fetchUsers = async () => {
     try {
+      setLoading(true);
+
       const res = await api.get("/auth/users");
+
       setUsers(res.data || []);
     } catch (error) {
       console.log(error);
-      showErrorToast("Failed to load users");
+      showErrorToast(error?.response?.data?.message || "Failed to load users");
     } finally {
       setLoading(false);
     }
   };
 
   const handleDelete = async (id, email) => {
+    const userId = Number(id);
+
+    if (userId === Number(currentUserId)) {
+      showErrorToast("You cannot delete your own account");
+      return;
+    }
+
     if (!confirm(`Delete user "${email}"? This cannot be undone.`)) return;
 
     try {
-      await api.delete(`/auth/users/${id}`);
+      setDeleteLoadingId(userId);
+
+      await api.delete(`/auth/users/${userId}`);
+
       showSuccessToast("User deleted successfully");
-      setUsers((prev) => prev.filter((user) => user.id !== id));
+
+      setUsers((prev) => prev.filter((user) => Number(user.id) !== userId));
     } catch (error) {
       console.log(error);
       showErrorToast(error?.response?.data?.message || "Failed to delete user");
+    } finally {
+      setDeleteLoadingId(null);
     }
   };
 
   const handleRoleChange = async (id, role) => {
-    try {
-      await api.patch(`/auth/users/${id}/role`, { role });
+    const userId = Number(id);
 
-      showSuccessToast("User role updated");
+    if (userId === Number(currentUserId)) {
+      showErrorToast("You cannot change your own role");
+      return;
+    }
+
+    const previousUsers = [...users];
+
+    try {
+      setRoleUpdatingId(userId);
+
+      const res = await api.patch(`/auth/users/${userId}/role`, { role });
+
+      const updatedUser = res.data?.user || res.data;
+
+      if (!updatedUser || !updatedUser.role) {
+        throw new Error("Invalid server response");
+      }
 
       setUsers((prev) =>
-        prev.map((user) => (user.id === id ? { ...user, role } : user))
+        prev.map((user) =>
+          Number(user.id) === userId
+            ? {
+                ...user,
+                ...updatedUser,
+                role: updatedUser.role,
+              }
+            : user
+        )
+      );
+
+      showSuccessToast(
+        `${updatedUser.username || updatedUser.email || "User"} is now ${
+          updatedUser.role
+        }`
       );
     } catch (error) {
       console.log(error);
-      showErrorToast("Failed to update user role");
+
+      setUsers(previousUsers);
+
+      showErrorToast(
+        error?.response?.data?.message ||
+          error?.message ||
+          "Failed to update user role"
+      );
+    } finally {
+      setRoleUpdatingId(null);
     }
   };
 
@@ -147,7 +205,9 @@ export default function AdminUsersPage() {
       {filteredUsers.length === 0 ? (
         <div className="bg-[#0d1117] border border-slate-700 rounded-2xl p-12 text-center">
           <p className="text-5xl mb-4">👤</p>
+
           <h2 className="text-xl font-bold text-white">No Users Found</h2>
+
           <p className="text-gray-400 mt-2">Try changing search or filter.</p>
         </div>
       ) : (
@@ -164,58 +224,71 @@ export default function AdminUsersPage() {
             </thead>
 
             <tbody>
-              {filteredUsers.map((user) => (
-                <tr
-                  key={user.id}
-                  className="border-b border-slate-800 hover:bg-slate-800/40 transition-colors"
-                >
-                  <td className="px-6 py-4 text-white text-sm font-semibold">
-                    {user.username || "N/A"}
-                  </td>
+              {filteredUsers.map((user) => {
+                const isCurrentUser =
+                  Number(user.id) === Number(currentUserId);
 
-                  <td className="px-6 py-4 text-gray-300 text-sm">
-                    {user.email}
-                  </td>
+                const isRoleUpdating =
+                  Number(roleUpdatingId) === Number(user.id);
 
-                  <td className="px-6 py-4">
-                    {user.id === currentUserId ? (
-                      <span className="text-xs px-3 py-1 rounded-full font-medium bg-[#D4AF37]/20 text-[#D4AF37]">
-                        {user.role}
-                      </span>
-                    ) : (
-                      <select
-                        value={user.role}
-                        onChange={(e) =>
-                          handleRoleChange(user.id, e.target.value)
-                        }
-                        className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-[#D4AF37]"
-                      >
-                        <option value="USER">USER</option>
-                        <option value="ADMIN">ADMIN</option>
-                      </select>
-                    )}
-                  </td>
+                const isDeleting =
+                  Number(deleteLoadingId) === Number(user.id);
 
-                  <td className="px-6 py-4 text-gray-400 text-sm">
-                    {new Date(user.createdAt).toLocaleDateString("en-PK")}
-                  </td>
+                return (
+                  <tr
+                    key={user.id}
+                    className="border-b border-slate-800 hover:bg-slate-800/40 transition-colors"
+                  >
+                    <td className="px-6 py-4 text-white text-sm font-semibold">
+                      {user.username || "N/A"}
+                    </td>
 
-                  <td className="px-6 py-4 text-right">
-                    {user.id !== currentUserId ? (
-                      <button
-                        onClick={() => handleDelete(user.id, user.email)}
-                        className="text-xs px-4 py-2 rounded-lg bg-red-500/10 text-red-400 border border-red-500/30 hover:bg-red-500 hover:text-white hover:border-red-500 transition-colors font-medium cursor-pointer"
-                      >
-                        🗑️ Delete
-                      </button>
-                    ) : (
-                      <span className="text-xs text-gray-500 italic">
-                        Current User
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              ))}
+                    <td className="px-6 py-4 text-gray-300 text-sm">
+                      {user.email}
+                    </td>
+
+                    <td className="px-6 py-4">
+                      {isCurrentUser ? (
+                        <span className="text-xs px-3 py-1 rounded-full font-medium bg-[#D4AF37]/20 text-[#D4AF37]">
+                          {user.role}
+                        </span>
+                      ) : (
+                        <select
+                          value={user.role}
+                          disabled={isRoleUpdating}
+                          onChange={(e) =>
+                            handleRoleChange(user.id, e.target.value)
+                          }
+                          className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-[#D4AF37] disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <option value="USER">USER</option>
+                          <option value="ADMIN">ADMIN</option>
+                        </select>
+                      )}
+                    </td>
+
+                    <td className="px-6 py-4 text-gray-400 text-sm">
+                      {new Date(user.createdAt).toLocaleDateString("en-PK")}
+                    </td>
+
+                    <td className="px-6 py-4 text-right">
+                      {!isCurrentUser ? (
+                        <button
+                          onClick={() => handleDelete(user.id, user.email)}
+                          disabled={isDeleting}
+                          className="text-xs px-4 py-2 rounded-lg bg-red-500/10 text-red-400 border border-red-500/30 hover:bg-red-500 hover:text-white hover:border-red-500 transition-colors font-medium cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {isDeleting ? "Deleting..." : "🗑️ Delete"}
+                        </button>
+                      ) : (
+                        <span className="text-xs text-gray-500 italic">
+                          Current User
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

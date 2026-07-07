@@ -19,7 +19,7 @@ exports.register = async (req, res) => {
     }
 
     const exists = await prisma.user.findUnique({
-      where: { email },
+      where: { email: email.trim().toLowerCase() },
     });
 
     if (exists) {
@@ -32,8 +32,8 @@ exports.register = async (req, res) => {
 
     const user = await prisma.user.create({
       data: {
-        username,
-        email,
+        username: username.trim(),
+        email: email.trim().toLowerCase(),
         password: hashedPassword,
       },
     });
@@ -43,6 +43,7 @@ exports.register = async (req, res) => {
     res.status(201).json(safeUser);
   } catch (err) {
     res.status(500).json({
+      message: "Registration failed",
       error: err.message,
     });
   }
@@ -53,7 +54,7 @@ exports.login = async (req, res) => {
     const { email, password } = req.body;
 
     const user = await prisma.user.findUnique({
-      where: { email },
+      where: { email: email.trim().toLowerCase() },
     });
 
     if (!user) {
@@ -90,6 +91,7 @@ exports.login = async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({
+      message: "Login failed",
       error: err.message,
     });
   }
@@ -97,7 +99,7 @@ exports.login = async (req, res) => {
 
 exports.updateProfile = async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = Number(req.user.id);
     const { username } = req.body;
 
     if (!username || username.trim() === "") {
@@ -126,6 +128,7 @@ exports.updateProfile = async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({
+      message: "Profile update failed",
       error: err.message,
     });
   }
@@ -133,7 +136,7 @@ exports.updateProfile = async (req, res) => {
 
 exports.changePassword = async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = Number(req.user.id);
     const { oldPassword, newPassword } = req.body;
 
     if (!oldPassword || !newPassword) {
@@ -186,6 +189,7 @@ exports.changePassword = async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({
+      message: "Password change failed",
       error: err.message,
     });
   }
@@ -206,46 +210,111 @@ exports.getAllUsers = async (req, res) => {
 
     res.json(users);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({
+      message: "Failed to load users",
+      error: err.message,
+    });
   }
 };
 
 exports.updateUserRole = async (req, res) => {
   try {
-    const { id } = req.params;
+    const targetUserId = Number(req.params.id);
     const { role } = req.body;
 
+    if (!targetUserId || Number.isNaN(targetUserId)) {
+      return res.status(400).json({
+        message: "Invalid user id",
+      });
+    }
+
     if (!["USER", "ADMIN"].includes(role)) {
-      return res.status(400).json({ message: "Invalid role" });
+      return res.status(400).json({
+        message: "Invalid role",
+      });
+    }
+
+    if (Number(req.user.id) === targetUserId) {
+      return res.status(400).json({
+        message: "You cannot change your own role",
+      });
+    }
+
+    const existingUser = await prisma.user.findUnique({
+      where: { id: targetUserId },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        role: true,
+        createdAt: true,
+      },
+    });
+
+    if (!existingUser) {
+      return res.status(404).json({
+        message: "User not found",
+      });
+    }
+
+    if (existingUser.role === role) {
+      return res.json({
+        message: "User role is already updated",
+        user: existingUser,
+      });
     }
 
     const updatedUser = await prisma.user.update({
-      where: { id: parseInt(id) },
+      where: { id: targetUserId },
       data: { role },
       select: {
         id: true,
         username: true,
         email: true,
         role: true,
+        createdAt: true,
       },
     });
 
-    res.json(updatedUser);
+    res.json({
+      message: "User role updated successfully",
+      user: updatedUser,
+    });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({
+      message: "Failed to update user role",
+      error: err.message,
+    });
   }
 };
 
 exports.deleteUser = async (req, res) => {
   try {
-    const { id } = req.params;
+    const targetUserId = Number(req.params.id);
+
+    if (!targetUserId || Number.isNaN(targetUserId)) {
+      return res.status(400).json({
+        message: "Invalid user id",
+      });
+    }
+
+    if (Number(req.user.id) === targetUserId) {
+      return res.status(400).json({
+        message: "You cannot delete your own account",
+      });
+    }
 
     await prisma.user.delete({
-      where: { id: parseInt(id) },
+      where: { id: targetUserId },
     });
 
-    res.json({ message: "User deleted successfully" });
+    res.json({
+      message: "User deleted successfully",
+    });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({
+      message: "Failed to delete user",
+      error: err.message,
+    });
   }
 };
