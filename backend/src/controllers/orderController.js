@@ -2,7 +2,6 @@ const prisma = require("../config/db");
 const sendEmail = require("../utils/sendEmail");
 
 // Create Order
-
 exports.createOrder = async (req, res) => {
   try {
     const {
@@ -11,19 +10,34 @@ exports.createOrder = async (req, res) => {
       phone,
       address,
       total,
+      subtotal,
+      shippingFee,
+      taxAmount,
+      taxPercentage,
+      grandTotal,
       paymentMethod,
       items,
     } = req.body;
 
-    // userId comes from the verified token, not from the request body
     const userId = req.user?.id;
 
+    const finalSubtotal =
+      Number(subtotal) ||
+      items.reduce(
+        (sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 1),
+        0
+      );
+
+    const finalShippingFee = Number(shippingFee || 0);
+    const finalTaxAmount = Number(taxAmount || 0);
+    const finalTaxPercentage = Number(taxPercentage || 0);
+    const finalGrandTotal =
+      Number(grandTotal) ||
+      Number(total) ||
+      finalSubtotal + finalShippingFee + finalTaxAmount;
+
     const trackingId =
-      "TRK-" +
-      Math.random()
-        .toString(36)
-        .substring(2, 8)
-        .toUpperCase();
+      "TRK-" + Math.random().toString(36).substring(2, 8).toUpperCase();
 
     const order = await prisma.order.create({
       data: {
@@ -33,14 +47,21 @@ exports.createOrder = async (req, res) => {
         email,
         phone,
         address,
-        total,
+
+        subtotal: finalSubtotal,
+        shippingFee: finalShippingFee,
+        taxAmount: finalTaxAmount,
+        taxPercentage: finalTaxPercentage,
+        grandTotal: finalGrandTotal,
+
+        total: finalGrandTotal,
         paymentMethod: paymentMethod || "COD",
 
         items: {
           create: items.map((item) => ({
-            productId: item.productId,
-            quantity: item.quantity,
-            price: item.price,
+            productId: Number(item.productId),
+            quantity: Number(item.quantity),
+            price: Number(item.price),
           })),
         },
       },
@@ -50,7 +71,6 @@ exports.createOrder = async (req, res) => {
       },
     });
 
-    // Send email to customer (BEFORE sending response)
     try {
       await sendEmail({
         to: email,
@@ -58,27 +78,23 @@ exports.createOrder = async (req, res) => {
         html: `
           <div>
             <h2>Thank You For Your Order 🎉</h2>
-
             <p>Hello <strong>${customer}</strong></p>
-
             <p>Your order has been placed successfully.</p>
-
             <p><strong>Tracking ID:</strong> ${trackingId}</p>
-
-            <p><strong>Payment Method:</strong> ${
-              paymentMethod || "COD"
-            }</p>
-
-            <p><strong>Total:</strong> Rs ${total}</p>
+            <p><strong>Payment Method:</strong> ${paymentMethod || "COD"}</p>
+            <p><strong>Subtotal:</strong> Rs ${finalSubtotal}</p>
+            <p><strong>Shipping:</strong> Rs ${finalShippingFee}</p>
+            <p><strong>Tax:</strong> Rs ${finalTaxAmount}</p>
+            <p><strong>Total:</strong> Rs ${finalGrandTotal}</p>
           </div>
         `,
       });
+
       console.log("✅ Customer email sent for order:", trackingId);
     } catch (err) {
       console.error("❌ Customer Email Error:", err.message);
     }
 
-    // Send email to admin (BEFORE sending response)
     try {
       await sendEmail({
         to: process.env.ADMIN_EMAIL,
@@ -86,28 +102,25 @@ exports.createOrder = async (req, res) => {
         html: `
           <div>
             <h2>New Order Received 🛒</h2>
-
             <p><strong>Customer:</strong> ${customer}</p>
             <p><strong>Email:</strong> ${email}</p>
             <p><strong>Phone:</strong> ${phone}</p>
             <p><strong>Address:</strong> ${address}</p>
-
             <p><strong>Tracking ID:</strong> ${trackingId}</p>
-
-            <p><strong>Payment Method:</strong> ${
-              paymentMethod || "COD"
-            }</p>
-
-            <p><strong>Total:</strong> Rs ${total}</p>
+            <p><strong>Payment Method:</strong> ${paymentMethod || "COD"}</p>
+            <p><strong>Subtotal:</strong> Rs ${finalSubtotal}</p>
+            <p><strong>Shipping:</strong> Rs ${finalShippingFee}</p>
+            <p><strong>Tax:</strong> Rs ${finalTaxAmount}</p>
+            <p><strong>Total:</strong> Rs ${finalGrandTotal}</p>
           </div>
         `,
       });
+
       console.log("✅ Admin email sent for order:", trackingId);
     } catch (err) {
       console.error("❌ Admin Email Error:", err.message);
     }
 
-    // Send response AFTER emails are done
     res.status(201).json({
       success: true,
       trackingId,
@@ -123,14 +136,12 @@ exports.createOrder = async (req, res) => {
 };
 
 // Track Order
-
 exports.getOrder = async (req, res) => {
   try {
     const order = await prisma.order.findUnique({
       where: {
         trackingId: req.params.trackingId,
       },
-
       include: {
         items: {
           include: {
@@ -147,7 +158,6 @@ exports.getOrder = async (req, res) => {
     }
 
     res.json(order);
-
   } catch (err) {
     res.status(500).json({
       error: err.message,
@@ -156,7 +166,6 @@ exports.getOrder = async (req, res) => {
 };
 
 // Get All Orders
-
 exports.getAllOrders = async (req, res) => {
   try {
     const orders = await prisma.order.findMany({
@@ -167,14 +176,12 @@ exports.getAllOrders = async (req, res) => {
           },
         },
       },
-
       orderBy: {
         createdAt: "desc",
       },
     });
 
     res.json(orders);
-
   } catch (err) {
     res.status(500).json({
       error: err.message,
@@ -183,7 +190,6 @@ exports.getAllOrders = async (req, res) => {
 };
 
 // Update Order Status
-
 exports.updateOrderStatus = async (req, res) => {
   try {
     const { status } = req.body;
@@ -192,35 +198,22 @@ exports.updateOrderStatus = async (req, res) => {
       where: {
         id: Number(req.params.id),
       },
-
       data: {
         status,
       },
     });
 
-    // Send email BEFORE response here too, for consistency
     try {
       await sendEmail({
         to: order.email,
         subject: "Order Status Updated",
-
         html: `
           <div>
             <h2>Order Status Updated</h2>
-
             <p>Hello ${order.customer}</p>
-
             <p>Your order status has been updated.</p>
-
-            <p>
-              <strong>Tracking ID:</strong>
-              ${order.trackingId}
-            </p>
-
-            <p>
-              <strong>Status:</strong>
-              ${status}
-            </p>
+            <p><strong>Tracking ID:</strong> ${order.trackingId}</p>
+            <p><strong>Status:</strong> ${status}</p>
           </div>
         `,
       });
@@ -232,7 +225,6 @@ exports.updateOrderStatus = async (req, res) => {
       success: true,
       order,
     });
-
   } catch (err) {
     console.error("❌ Update Order Status Error:", err.message);
 
@@ -243,7 +235,6 @@ exports.updateOrderStatus = async (req, res) => {
 };
 
 // Dashboard Stats
-
 exports.getStats = async (req, res) => {
   try {
     const totalOrders = await prisma.order.count();
@@ -286,7 +277,6 @@ exports.getStats = async (req, res) => {
       shippedOrders,
       deliveredOrders,
     });
-
   } catch (err) {
     console.error("❌ Stats Error:", err.message);
 
@@ -297,7 +287,6 @@ exports.getStats = async (req, res) => {
 };
 
 // User Order History
-
 exports.getMyOrders = async (req, res) => {
   try {
     const { email } = req.params;
@@ -306,7 +295,6 @@ exports.getMyOrders = async (req, res) => {
       where: {
         email,
       },
-
       include: {
         items: {
           include: {
@@ -314,7 +302,6 @@ exports.getMyOrders = async (req, res) => {
           },
         },
       },
-
       orderBy: {
         createdAt: "desc",
       },
@@ -331,6 +318,7 @@ exports.getMyOrders = async (req, res) => {
   }
 };
 
+// Get Order By Id
 exports.getOrderById = async (req, res) => {
   try {
     const order = await prisma.order.findUnique({
@@ -363,7 +351,6 @@ exports.getOrderById = async (req, res) => {
 };
 
 // Cancel Order
-
 exports.cancelOrder = async (req, res) => {
   try {
     const order = await prisma.order.findUnique({
@@ -378,13 +365,9 @@ exports.cancelOrder = async (req, res) => {
       });
     }
 
-    if (
-      order.status === "Delivered" ||
-      order.status === "Cancelled"
-    ) {
+    if (order.status === "Delivered" || order.status === "Cancelled") {
       return res.status(400).json({
-        message:
-          "Delivered or Cancelled orders cannot be cancelled",
+        message: "Delivered or Cancelled orders cannot be cancelled",
       });
     }
 
