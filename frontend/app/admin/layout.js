@@ -8,6 +8,7 @@ import {
   FiUsers,
   FiSettings,
   FiArrowLeftCircle,
+  FiPercent,
 } from "react-icons/fi";
 
 export default function AdminLayout({ children }) {
@@ -20,8 +21,6 @@ export default function AdminLayout({ children }) {
         </h1>
 
         <div className="flex flex-col gap-3">
-
-          {/* Dashboard */}
           <Link
             href="/admin"
             className="flex items-center gap-3 bg-slate-800 text-white px-4 py-3 rounded-lg hover:bg-[#D4AF37] hover:text-black transition-all duration-300"
@@ -30,7 +29,6 @@ export default function AdminLayout({ children }) {
             Dashboard
           </Link>
 
-          {/* Products */}
           <Link
             href="/admin/products"
             className="flex items-center gap-3 bg-slate-800 text-white px-4 py-3 rounded-lg hover:bg-[#D4AF37] hover:text-black transition-all duration-300"
@@ -39,7 +37,6 @@ export default function AdminLayout({ children }) {
             Products
           </Link>
 
-          {/* Orders */}
           <Link
             href="/admin/orders"
             className="flex items-center gap-3 bg-slate-800 text-white px-4 py-3 rounded-lg hover:bg-[#D4AF37] hover:text-black transition-all duration-300"
@@ -48,7 +45,6 @@ export default function AdminLayout({ children }) {
             Orders
           </Link>
 
-          {/* Users */}
           <Link
             href="/admin/users"
             className="flex items-center gap-3 bg-slate-800 text-white px-4 py-3 rounded-lg hover:bg-[#D4AF37] hover:text-black transition-all duration-300"
@@ -57,7 +53,14 @@ export default function AdminLayout({ children }) {
             Users
           </Link>
 
-          {/* Settings */}
+          <Link
+            href="/admin/coupons"
+            className="flex items-center gap-3 bg-slate-800 text-white px-4 py-3 rounded-lg hover:bg-[#D4AF37] hover:text-black transition-all duration-300"
+          >
+            <FiPercent size={20} />
+            Coupons
+          </Link>
+
           <Link
             href="/admin/settings"
             className="flex items-center gap-3 bg-[#0B1F33] border border-[#D4AF37] text-white px-4 py-3 rounded-lg font-semibold hover:bg-[#D4AF37] hover:text-black transition-all duration-300"
@@ -70,7 +73,6 @@ export default function AdminLayout({ children }) {
             Settings
           </Link>
 
-          {/* Back To Store */}
           <Link
             href="/"
             className="flex items-center justify-center gap-2 mt-8 bg-[#D4AF37] text-black px-6 py-3 rounded-lg font-bold hover:scale-105 transition-all duration-300"
@@ -78,15 +80,12 @@ export default function AdminLayout({ children }) {
             <FiArrowLeftCircle size={20} />
             Back To Store
           </Link>
-
         </div>
       </aside>
 
       {/* Content */}
       <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-8">
-        <div className="w-full max-w-full min-w-0">
-          {children}
-        </div>
+        <div className="w-full max-w-full min-w-0">{children}</div>
       </main>
     </div>
   );
