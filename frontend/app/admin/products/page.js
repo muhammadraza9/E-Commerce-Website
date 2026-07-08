@@ -1,18 +1,46 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import api from "@/services/api";
-import {
-  showSuccessToast,
-  showErrorToast,
-} from "@/utils/toast";
+import { showSuccessToast, showErrorToast } from "@/utils/toast";
 import AdminProductsSkeleton from "@/components/skeletons/AdminProductsSkeleton";
+
+const formatNumber = (value) => {
+  return Number(value || 0).toLocaleString("en-PK");
+};
+
+const getStockStatus = (stock, lowStockLimit) => {
+  const currentStock = Number(stock || 0);
+
+  if (currentStock <= 0) {
+    return {
+      label: "Out of Stock",
+      className: "bg-red-500/20 text-red-400 border border-red-500/30",
+    };
+  }
+
+  if (currentStock <= lowStockLimit) {
+    return {
+      label: "Low Stock",
+      className:
+        "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30",
+    };
+  }
+
+  return {
+    label: "In Stock",
+    className: "bg-green-500/20 text-green-400 border border-green-500/30",
+  };
+};
 
 export default function AdminProductsPage() {
   const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [settings, setSettings] = useState({
+    lowStockAlertLimit: 5,
+  });
 
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -20,6 +48,7 @@ export default function AdminProductsPage() {
   const [totalProducts, setTotalProducts] = useState(0);
 
   const limit = 12;
+  const lowStockLimit = Number(settings.lowStockAlertLimit || 5);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -43,12 +72,19 @@ export default function AdminProductsPage() {
         search,
       });
 
-      const res = await api.get(`/products?${params.toString()}`);
+      const [productsRes, settingsRes] = await Promise.all([
+        api.get(`/products?${params.toString()}`),
+        api.get("/admin-settings"),
+      ]);
 
-      setProducts(res.data.products || []);
-      setCurrentPage(res.data.currentPage || 1);
-      setTotalPages(res.data.totalPages || 1);
-      setTotalProducts(res.data.totalProducts || 0);
+      setProducts(productsRes.data.products || []);
+      setCurrentPage(productsRes.data.currentPage || 1);
+      setTotalPages(productsRes.data.totalPages || 1);
+      setTotalProducts(productsRes.data.totalProducts || 0);
+
+      setSettings({
+        lowStockAlertLimit: settingsRes.data?.lowStockAlertLimit || 5,
+      });
     } catch (error) {
       console.log(error);
       showErrorToast("Failed to load products");
@@ -56,6 +92,28 @@ export default function AdminProductsPage() {
       setLoading(false);
     }
   };
+
+  const inventorySummary = useMemo(() => {
+    const totalStock = products.reduce(
+      (sum, product) => sum + Number(product.stock || 0),
+      0
+    );
+
+    const lowStock = products.filter((product) => {
+      const stock = Number(product.stock || 0);
+      return stock > 0 && stock <= lowStockLimit;
+    }).length;
+
+    const outOfStock = products.filter(
+      (product) => Number(product.stock || 0) <= 0
+    ).length;
+
+    return {
+      totalStock,
+      lowStock,
+      outOfStock,
+    };
+  }, [products, lowStockLimit]);
 
   const handleDelete = async (id) => {
     const confirmDelete = confirm(
@@ -66,9 +124,7 @@ export default function AdminProductsPage() {
 
     try {
       await api.delete(`/products/${id}`);
-
       showSuccessToast("Product deleted");
-
       fetchProducts();
     } catch (error) {
       console.log(error);
@@ -125,9 +181,33 @@ export default function AdminProductsPage() {
           Admin <span className="text-[#D4AF37]">Products</span>
         </h1>
 
-        <p className="text-gray-400 mt-2">
-          Total Products : {totalProducts}
-        </p>
+        <p className="text-gray-400 mt-2">Total Products : {totalProducts}</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <SummaryCard
+          title="Current Page Stock"
+          value={formatNumber(inventorySummary.totalStock)}
+          color="text-[#D4AF37]"
+        />
+
+        <SummaryCard
+          title="Low Stock Limit"
+          value={lowStockLimit}
+          color="text-yellow-400"
+        />
+
+        <SummaryCard
+          title="Low Stock"
+          value={inventorySummary.lowStock}
+          color="text-yellow-400"
+        />
+
+        <SummaryCard
+          title="Out of Stock"
+          value={inventorySummary.outOfStock}
+          color="text-red-400"
+        />
       </div>
 
       <div className="flex flex-col md:flex-row gap-4 mb-10">
@@ -141,7 +221,7 @@ export default function AdminProductsPage() {
 
         <Link
           href="/admin/products/add"
-          className="md:w-56 flex items-center justify-center bg-[#D4AF37] hover:bg-[#c9a227] rounded-xl text-white font-semibold transition py-4"
+          className="md:w-56 flex items-center justify-center bg-[#D4AF37] hover:bg-[#c9a227] rounded-xl text-black font-bold transition py-4"
         >
           + Add Product
         </Link>
@@ -154,74 +234,108 @@ export default function AdminProductsPage() {
       ) : (
         <>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {products.map((product) => (
-              <div
-                key={product.id}
-                className="group bg-[#0d1117] border border-slate-800 rounded-2xl overflow-hidden hover:border-[#D4AF37] transition"
-              >
-                <div className="relative aspect-[4/5] overflow-hidden">
-                  <img
-                    src={product.image}
-                    alt={product.name}
-                    className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
-                  />
+            {products.map((product) => {
+              const stock = Number(product.stock || 0);
+              const stockStatus = getStockStatus(stock, lowStockLimit);
 
-                  <span className="absolute top-3 left-3 bg-black/70 px-3 py-1 rounded-full text-xs text-white">
-                    {product.category}
-                  </span>
+              return (
+                <div
+                  key={product.id}
+                  className="group bg-[#0d1117] border border-slate-800 rounded-2xl overflow-hidden hover:border-[#D4AF37] transition"
+                >
+                  <div className="relative aspect-[4/5] overflow-hidden">
+                    <img
+                      src={product.image}
+                      alt={product.name}
+                      className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                    />
 
-                  {product.featured && (
-                    <span className="absolute top-3 right-3 bg-[#D4AF37] text-black px-3 py-1 rounded-full text-xs font-bold">
-                      ⭐ Featured
+                    <span className="absolute top-3 left-3 bg-black/70 px-3 py-1 rounded-full text-xs text-white">
+                      {product.category}
                     </span>
-                  )}
-                </div>
 
-                <div className="p-5">
-                  <h2 className="text-white text-lg font-semibold">
-                    {product.name}
-                  </h2>
+                    {product.featured && (
+                      <span className="absolute top-3 right-3 bg-[#D4AF37] text-black px-3 py-1 rounded-full text-xs font-bold">
+                        ⭐ Featured
+                      </span>
+                    )}
 
-                  <p className="text-gray-400 text-sm line-clamp-2 mt-2">
-                    {product.description}
-                  </p>
-
-                  <p className="text-[#D4AF37] font-bold text-lg mt-3">
-                    Rs {product.price}
-                  </p>
-
-                  <div className="mt-3">
                     <span
-                      className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                        product.featured
-                          ? "bg-green-600 text-white"
-                          : "bg-slate-700 text-gray-300"
-                      }`}
+                      className={`absolute bottom-3 left-3 px-3 py-1 rounded-full text-xs font-bold ${stockStatus.className}`}
                     >
-                      {product.featured
-                        ? "Featured Product"
-                        : "Normal Product"}
+                      {stockStatus.label}
                     </span>
                   </div>
 
-                  <div className="flex gap-3 mt-6">
-                    <Link
-                      href={`/admin/products/edit/${product.id}`}
-                      className="flex-1 text-center bg-blue-600 hover:bg-blue-700 py-2 rounded-lg text-white transition"
-                    >
-                      Edit
-                    </Link>
+                  <div className="p-5">
+                    <h2 className="text-white text-lg font-semibold line-clamp-1">
+                      {product.name}
+                    </h2>
 
-                    <button
-                      onClick={() => handleDelete(product.id)}
-                      className="flex-1 bg-red-600 hover:bg-red-700 py-2 rounded-lg text-white cursor-pointer transition"
-                    >
-                      Delete
-                    </button>
+                    <p className="text-gray-400 text-sm line-clamp-2 mt-2">
+                      {product.description}
+                    </p>
+
+                    <div className="flex items-center justify-between gap-3 mt-4">
+                      <p className="text-[#D4AF37] font-bold text-lg">
+                        Rs {formatNumber(product.price)}
+                      </p>
+
+                      <div className="text-right">
+                        <p className="text-gray-500 text-xs">Stock</p>
+                        <p
+                          className={`font-bold ${
+                            stock <= 0
+                              ? "text-red-400"
+                              : stock <= lowStockLimit
+                              ? "text-yellow-400"
+                              : "text-green-400"
+                          }`}
+                        >
+                          {stock} left
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <span
+                        className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                          product.featured
+                            ? "bg-green-600 text-white"
+                            : "bg-slate-700 text-gray-300"
+                        }`}
+                      >
+                        {product.featured
+                          ? "Featured Product"
+                          : "Normal Product"}
+                      </span>
+
+                      <span
+                        className={`px-3 py-1 rounded-full text-xs font-semibold ${stockStatus.className}`}
+                      >
+                        {stockStatus.label}
+                      </span>
+                    </div>
+
+                    <div className="flex gap-3 mt-6">
+                      <Link
+                        href={`/admin/products/edit/${product.id}`}
+                        className="flex-1 text-center bg-blue-600 hover:bg-blue-700 py-2 rounded-lg text-white transition"
+                      >
+                        Edit
+                      </Link>
+
+                      <button
+                        onClick={() => handleDelete(product.id)}
+                        className="flex-1 bg-red-600 hover:bg-red-700 py-2 rounded-lg text-white cursor-pointer transition"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {totalPages > 1 && (
@@ -265,6 +379,16 @@ export default function AdminProductsPage() {
           )}
         </>
       )}
+    </div>
+  );
+}
+
+function SummaryCard({ title, value, color }) {
+  return (
+    <div className="bg-[#0d1117] border border-slate-800 rounded-2xl p-5">
+      <p className="text-gray-400 text-sm">{title}</p>
+
+      <h2 className={`text-2xl font-bold mt-2 ${color}`}>{value}</h2>
     </div>
   );
 }
