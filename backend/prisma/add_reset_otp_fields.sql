@@ -1,0 +1,3 @@
+ALTER TABLE `user`
+ADD COLUMN `resetOtp` VARCHAR(10) NULL,
+ADD COLUMN `resetOtpExpiry` DATETIME NULL;

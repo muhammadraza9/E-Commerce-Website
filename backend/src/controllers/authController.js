@@ -1,7 +1,6 @@
 const prisma = require("../config/db");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const crypto = require("crypto");
 const sendEmail = require("../utils/sendEmail");
 
 exports.register = async (req, res) => {
@@ -9,9 +8,7 @@ exports.register = async (req, res) => {
     const { username, email, password } = req.body;
 
     if (!username || !email || !password) {
-      return res.status(400).json({
-        message: "All fields are required",
-      });
+      return res.status(400).json({ message: "All fields are required" });
     }
 
     if (password.length < 4 || password.length > 9) {
@@ -25,9 +22,7 @@ exports.register = async (req, res) => {
     });
 
     if (exists) {
-      return res.status(400).json({
-        message: "User already exists",
-      });
+      return res.status(400).json({ message: "User already exists" });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -40,7 +35,8 @@ exports.register = async (req, res) => {
       },
     });
 
-    const { password: userPassword, ...safeUser } = user;
+    const { password: userPassword, resetOtp, resetOtpExpiry, ...safeUser } =
+      user;
 
     res.status(201).json(safeUser);
   } catch (err) {
@@ -60,31 +56,22 @@ exports.login = async (req, res) => {
     });
 
     if (!user) {
-      return res.status(400).json({
-        message: "Invalid Credentials",
-      });
+      return res.status(400).json({ message: "Invalid Credentials" });
     }
 
     const match = await bcrypt.compare(password, user.password);
 
     if (!match) {
-      return res.status(400).json({
-        message: "Invalid Credentials",
-      });
+      return res.status(400).json({ message: "Invalid Credentials" });
     }
 
     const token = jwt.sign(
-      {
-        id: user.id,
-        role: user.role,
-      },
+      { id: user.id, role: user.role },
       process.env.JWT_SECRET,
-      {
-        expiresIn: "7d",
-      }
+      { expiresIn: "7d" }
     );
 
-    const { password: userPassword, resetToken, resetTokenExpiry, ...safeUser } =
+    const { password: userPassword, resetOtp, resetOtpExpiry, ...safeUser } =
       user;
 
     res.json({
@@ -105,9 +92,7 @@ exports.forgotPassword = async (req, res) => {
     const { email } = req.body;
 
     if (!email || email.trim() === "") {
-      return res.status(400).json({
-        message: "Email is required",
-      });
+      return res.status(400).json({ message: "Email is required" });
     }
 
     const user = await prisma.user.findUnique({
@@ -120,60 +105,41 @@ exports.forgotPassword = async (req, res) => {
       });
     }
 
-    const resetToken = crypto.randomBytes(32).toString("hex");
-    const resetTokenExpiry = new Date(Date.now() + 15 * 60 * 1000);
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const resetOtpExpiry = new Date(Date.now() + 10 * 60 * 1000);
 
     await prisma.user.update({
       where: { id: user.id },
       data: {
-        resetToken,
-        resetTokenExpiry,
+        resetOtp: otp,
+        resetOtpExpiry,
       },
     });
 
-    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
-    const resetLink = `${frontendUrl}/reset-password/${resetToken}`;
-
     await sendEmail({
       to: user.email,
-      subject: "Reset Your Password - Style Avenue",
+      subject: "Password Reset OTP - Style Avenue",
       html: `
         <div style="font-family:Arial,sans-serif;background:#0B1F33;padding:30px;color:#ffffff;">
           <div style="max-width:600px;margin:auto;background:#081421;border:1px solid #D4AF37;border-radius:14px;padding:30px;">
             <h1 style="color:#D4AF37;margin-bottom:10px;">Style Avenue</h1>
-            <h2 style="margin-bottom:15px;">Reset Your Password</h2>
-
+            <h2>Password Reset OTP</h2>
             <p>Hello <strong>${user.username}</strong>,</p>
-
-            <p>You requested to reset your password. Click the button below to create a new password.</p>
-
-            <p style="margin:25px 0;">
-              <a href="${resetLink}" style="background:#D4AF37;color:#000;padding:14px 24px;border-radius:10px;text-decoration:none;font-weight:bold;display:inline-block;">
-                Reset Password
-              </a>
-            </p>
-
-            <p>This link will expire in <strong>15 minutes</strong>.</p>
-
+            <p>Your password reset OTP is:</p>
+            <div style="font-size:34px;letter-spacing:8px;color:#D4AF37;font-weight:bold;margin:24px 0;">
+              ${otp}
+            </div>
+            <p>This OTP will expire in <strong>10 minutes</strong>.</p>
             <p>If you did not request this, you can safely ignore this email.</p>
-
-            <hr style="border:none;border-top:1px solid #334155;margin:25px 0;" />
-
-            <p style="font-size:12px;color:#94a3b8;">
-              If the button does not work, copy and paste this link into your browser:<br/>
-              ${resetLink}
-            </p>
           </div>
         </div>
       `,
     });
 
-    res.json({
-      message: "Password reset link sent to your email",
-    });
+    res.json({ message: "OTP sent to your email" });
   } catch (err) {
     res.status(500).json({
-      message: "Failed to send reset email",
+      message: "Failed to send OTP",
       error: err.message,
     });
   }
@@ -181,11 +147,11 @@ exports.forgotPassword = async (req, res) => {
 
 exports.resetPassword = async (req, res) => {
   try {
-    const { token, newPassword } = req.body;
+    const { email, otp, newPassword } = req.body;
 
-    if (!token || !newPassword) {
+    if (!email || !otp || !newPassword) {
       return res.status(400).json({
-        message: "Token and new password are required",
+        message: "Email, OTP and new password are required",
       });
     }
 
@@ -197,8 +163,9 @@ exports.resetPassword = async (req, res) => {
 
     const user = await prisma.user.findFirst({
       where: {
-        resetToken: token,
-        resetTokenExpiry: {
+        email: email.trim().toLowerCase(),
+        resetOtp: otp.trim(),
+        resetOtpExpiry: {
           gt: new Date(),
         },
       },
@@ -206,7 +173,7 @@ exports.resetPassword = async (req, res) => {
 
     if (!user) {
       return res.status(400).json({
-        message: "Invalid or expired reset link",
+        message: "Invalid or expired OTP",
       });
     }
 
@@ -216,14 +183,12 @@ exports.resetPassword = async (req, res) => {
       where: { id: user.id },
       data: {
         password: hashedPassword,
-        resetToken: null,
-        resetTokenExpiry: null,
+        resetOtp: null,
+        resetOtpExpiry: null,
       },
     });
 
-    res.json({
-      message: "Password reset successfully",
-    });
+    res.json({ message: "Password reset successfully" });
   } catch (err) {
     res.status(500).json({
       message: "Password reset failed",
@@ -238,16 +203,12 @@ exports.updateProfile = async (req, res) => {
     const { username } = req.body;
 
     if (!username || username.trim() === "") {
-      return res.status(400).json({
-        message: "Username is required",
-      });
+      return res.status(400).json({ message: "Username is required" });
     }
 
     const updatedUser = await prisma.user.update({
       where: { id: userId },
-      data: {
-        username: username.trim(),
-      },
+      data: { username: username.trim() },
       select: {
         id: true,
         username: true,
@@ -297,9 +258,7 @@ exports.changePassword = async (req, res) => {
     });
 
     if (!user) {
-      return res.status(404).json({
-        message: "User not found",
-      });
+      return res.status(404).json({ message: "User not found" });
     }
 
     const match = await bcrypt.compare(oldPassword, user.password);
@@ -314,14 +273,10 @@ exports.changePassword = async (req, res) => {
 
     await prisma.user.update({
       where: { id: userId },
-      data: {
-        password: hashedPassword,
-      },
+      data: { password: hashedPassword },
     });
 
-    res.json({
-      message: "Password changed successfully",
-    });
+    res.json({ message: "Password changed successfully" });
   } catch (err) {
     res.status(500).json({
       message: "Password change failed",
@@ -358,15 +313,11 @@ exports.updateUserRole = async (req, res) => {
     const { role } = req.body;
 
     if (!targetUserId || Number.isNaN(targetUserId)) {
-      return res.status(400).json({
-        message: "Invalid user id",
-      });
+      return res.status(400).json({ message: "Invalid user id" });
     }
 
     if (!["USER", "ADMIN"].includes(role)) {
-      return res.status(400).json({
-        message: "Invalid role",
-      });
+      return res.status(400).json({ message: "Invalid role" });
     }
 
     if (Number(req.user.id) === targetUserId) {
@@ -387,9 +338,7 @@ exports.updateUserRole = async (req, res) => {
     });
 
     if (!existingUser) {
-      return res.status(404).json({
-        message: "User not found",
-      });
+      return res.status(404).json({ message: "User not found" });
     }
 
     if (existingUser.role === role) {
@@ -428,9 +377,7 @@ exports.deleteUser = async (req, res) => {
     const targetUserId = Number(req.params.id);
 
     if (!targetUserId || Number.isNaN(targetUserId)) {
-      return res.status(400).json({
-        message: "Invalid user id",
-      });
+      return res.status(400).json({ message: "Invalid user id" });
     }
 
     if (Number(req.user.id) === targetUserId) {
@@ -443,9 +390,7 @@ exports.deleteUser = async (req, res) => {
       where: { id: targetUserId },
     });
 
-    res.json({
-      message: "User deleted successfully",
-    });
+    res.json({ message: "User deleted successfully" });
   } catch (err) {
     res.status(500).json({
       message: "Failed to delete user",

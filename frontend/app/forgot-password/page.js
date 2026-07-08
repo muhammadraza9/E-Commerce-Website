@@ -7,10 +7,16 @@ import { showSuccessToast, showErrorToast } from "@/utils/toast";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [sent, setSent] = useState(false);
 
-  const handleSubmit = async (e) => {
+  const [formData, setFormData] = useState({
+    otp: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
+
+  const sendOtp = async (e) => {
     e.preventDefault();
 
     if (!email.trim()) {
@@ -25,11 +31,42 @@ export default function ForgotPasswordPage() {
         email: email.trim().toLowerCase(),
       });
 
-      setSent(true);
-      showSuccessToast("Reset link sent to your email");
+      setOtpSent(true);
+      showSuccessToast("OTP sent to your email");
+    } catch (error) {
+      showErrorToast(error?.response?.data?.message || "Failed to send OTP");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resetPassword = async (e) => {
+    e.preventDefault();
+
+    if (!formData.otp || !formData.newPassword || !formData.confirmPassword) {
+      showErrorToast("All fields are required");
+      return;
+    }
+
+    if (formData.newPassword !== formData.confirmPassword) {
+      showErrorToast("Passwords do not match");
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      await api.post("/auth/reset-password", {
+        email: email.trim().toLowerCase(),
+        otp: formData.otp,
+        newPassword: formData.newPassword,
+      });
+
+      showSuccessToast("Password reset successfully");
+      window.location.href = "/signin";
     } catch (error) {
       showErrorToast(
-        error?.response?.data?.message || "Failed to send reset link"
+        error?.response?.data?.message || "Password reset failed"
       );
     } finally {
       setLoading(false);
@@ -37,66 +74,79 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-6 py-16 bg-slate-950">
+    <div className="min-h-screen flex items-center justify-center px-6 bg-slate-950">
       <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl p-8">
-        <p className="text-[#D4AF37] text-sm font-semibold tracking-widest uppercase mb-2">
-          Style Avenue
-        </p>
-
         <h1 className="text-3xl font-bold text-white mb-3">
           Forgot <span className="text-[#D4AF37]">Password</span>
         </h1>
 
-        <p className="text-gray-400 text-sm leading-6 mb-6">
-          Enter your registered email address. We will send you a secure reset
-          link valid for 15 minutes.
-        </p>
-
-        {sent ? (
-          <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-5">
-            <p className="text-green-400 font-semibold mb-2">
-              Reset link sent successfully.
-            </p>
-            <p className="text-gray-300 text-sm">
-              Please check your email inbox and spam folder.
-            </p>
-
-            <Link
-              href="/signin"
-              className="inline-block mt-5 text-[#D4AF37] font-semibold hover:underline"
-            >
-              Back to Sign In
-            </Link>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-5">
+        {!otpSent ? (
+          <form onSubmit={sendOtp} className="space-y-5">
             <input
               type="email"
               placeholder="Enter your email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder:text-gray-500 outline-none focus:border-[#D4AF37]"
+              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:border-[#D4AF37]"
               required
             />
 
             <button
-              type="submit"
               disabled={loading}
-              className="w-full bg-[#D4AF37] text-black py-3 rounded-xl font-bold hover:bg-yellow-400 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-[#D4AF37] text-black py-3 rounded-xl font-bold"
             >
-              {loading ? "Sending..." : "Send Reset Link"}
+              {loading ? "Sending..." : "Send OTP"}
             </button>
+          </form>
+        ) : (
+          <form onSubmit={resetPassword} className="space-y-5">
+            <input
+              type="text"
+              placeholder="Enter OTP"
+              value={formData.otp}
+              onChange={(e) =>
+                setFormData({ ...formData, otp: e.target.value })
+              }
+              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:border-[#D4AF37]"
+              required
+            />
 
-            <div className="text-center">
-              <Link
-                href="/signin"
-                className="text-gray-400 hover:text-[#D4AF37] text-sm transition"
-              >
-                Back to Sign In
-              </Link>
-            </div>
+            <input
+              type="password"
+              placeholder="New Password"
+              value={formData.newPassword}
+              onChange={(e) =>
+                setFormData({ ...formData, newPassword: e.target.value })
+              }
+              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:border-[#D4AF37]"
+              required
+            />
+
+            <input
+              type="password"
+              placeholder="Confirm Password"
+              value={formData.confirmPassword}
+              onChange={(e) =>
+                setFormData({ ...formData, confirmPassword: e.target.value })
+              }
+              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:border-[#D4AF37]"
+              required
+            />
+
+            <button
+              disabled={loading}
+              className="w-full bg-[#D4AF37] text-black py-3 rounded-xl font-bold"
+            >
+              {loading ? "Resetting..." : "Reset Password"}
+            </button>
           </form>
         )}
+
+        <div className="text-center mt-5">
+          <Link href="/signin" className="text-[#D4AF37] hover:underline">
+            Back to Sign In
+          </Link>
+        </div>
       </div>
     </div>
   );

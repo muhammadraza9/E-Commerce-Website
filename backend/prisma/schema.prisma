@@ -70,8 +70,8 @@ model user {
   email            String    @unique
   password         String
   role             String    @default("USER")
-  resetToken       String?
-  resetTokenExpiry DateTime?
+  resetOtp         String?
+  resetOtpExpiry   DateTime?
   createdAt        DateTime  @default(now())
 
   orders           order[]
