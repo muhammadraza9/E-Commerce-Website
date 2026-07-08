@@ -22,15 +22,14 @@ export default function SigninPage() {
     const timer = setTimeout(() => {
       const prefillEmail = sessionStorage.getItem("prefillEmail");
 
-      if (prefillEmail) {
+      if (prefillEmail && prefillEmail.includes("@")) {
         setFormData((prev) => ({
           ...prev,
           email: prefillEmail,
         }));
-
-        sessionStorage.removeItem("prefillEmail");
       }
 
+      sessionStorage.removeItem("prefillEmail");
       setPageLoading(false);
     }, 500);
 
@@ -50,7 +49,10 @@ export default function SigninPage() {
     try {
       setLoading(true);
 
-      const res = await api.post("/auth/login", formData);
+      const res = await api.post("/auth/login", {
+        email: formData.email.trim().toLowerCase(),
+        password: formData.password,
+      });
 
       localStorage.setItem("token", res.data.token);
       localStorage.setItem("user", JSON.stringify(res.data.user));

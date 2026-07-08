@@ -21,7 +21,6 @@ const getProducts = async (req, res) => {
 
     const where = {};
 
-    // Search
     if (search && search.trim()) {
       where.OR = [
         {
@@ -37,12 +36,10 @@ const getProducts = async (req, res) => {
       ];
     }
 
-    // Category
     if (category && category !== "All") {
       where.category = category;
     }
 
-    // Featured Filter
     if (featured === "true") {
       where.featured = true;
     }
@@ -51,34 +48,33 @@ const getProducts = async (req, res) => {
       where.featured = false;
     }
 
-    // Sorting
     let orderBy = {
       createdAt: "desc",
     };
 
     switch (sort) {
       case "oldest":
-        orderBy = {
-          createdAt: "asc",
-        };
+        orderBy = { createdAt: "asc" };
         break;
 
       case "price_asc":
-        orderBy = {
-          price: "asc",
-        };
+        orderBy = { price: "asc" };
         break;
 
       case "price_desc":
-        orderBy = {
-          price: "desc",
-        };
+        orderBy = { price: "desc" };
+        break;
+
+      case "stock_low":
+        orderBy = { stock: "asc" };
+        break;
+
+      case "stock_high":
+        orderBy = { stock: "desc" };
         break;
 
       default:
-        orderBy = {
-          createdAt: "desc",
-        };
+        orderBy = { createdAt: "desc" };
     }
 
     const [products, totalProducts] = await Promise.all([
@@ -183,6 +179,7 @@ const createProduct = async (req, res) => {
       price,
       category,
       featured,
+      stock,
     } = req.body;
 
     if (!name || !description || !image || price === undefined) {
@@ -190,6 +187,8 @@ const createProduct = async (req, res) => {
         message: "Name, description, image and price are required",
       });
     }
+
+    const productStock = Math.max(Number(stock || 0), 0);
 
     const product = await prisma.product.create({
       data: {
@@ -199,6 +198,7 @@ const createProduct = async (req, res) => {
         price: Number(price),
         category: category || "Clothing",
         featured: Boolean(featured),
+        stock: productStock,
       },
     });
 
@@ -233,19 +233,23 @@ const updateProduct = async (req, res) => {
       price,
       category,
       featured,
+      stock,
     } = req.body;
+
+    const productStock = Math.max(Number(stock || 0), 0);
 
     const product = await prisma.product.update({
       where: {
         id,
       },
       data: {
-        name,
-        description,
+        name: name?.trim(),
+        description: description?.trim(),
         image,
         price: Number(price),
         category,
         featured: Boolean(featured),
+        stock: productStock,
       },
     });
 

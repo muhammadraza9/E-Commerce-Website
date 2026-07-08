@@ -8,30 +8,28 @@ datasource db {
 }
 
 model order {
-  id              Int         @id @default(autoincrement())
-  trackingId      String      @unique
-  customer        String
-  email           String
-  phone           String
-  address         String
-
-  subtotal        Float       @default(0)
-  discountAmount  Float       @default(0)
-  couponCode      String?
-  shippingFee     Float       @default(0)
-  taxAmount       Float       @default(0)
-  taxPercentage   Float       @default(0)
-  grandTotal      Float       @default(0)
-
-  total           Float
-  status          String      @default("Pending")
-  createdAt       DateTime    @default(now())
-  paymentMethod   String      @default("COD")
-  paymentStatus   String      @default("PENDING")
-  txnRefNo        String?
-  userId          Int?
-  user            user?       @relation(fields: [userId], references: [id])
-  items           orderitem[]
+  id             Int         @id @default(autoincrement())
+  trackingId     String      @unique
+  customer       String
+  email          String
+  phone          String
+  address        String
+  subtotal       Float       @default(0)
+  discountAmount Float       @default(0)
+  couponCode     String?
+  shippingFee    Float       @default(0)
+  taxAmount      Float       @default(0)
+  taxPercentage  Float       @default(0)
+  grandTotal     Float       @default(0)
+  total          Float
+  status         String      @default("Pending")
+  createdAt      DateTime    @default(now())
+  paymentMethod  String      @default("COD")
+  paymentStatus  String      @default("PENDING")
+  txnRefNo       String?
+  userId         Int?
+  user           user?       @relation(fields: [userId], references: [id])
+  items          orderitem[]
 
   @@index([userId], map: "order_userId_fkey")
 }
@@ -58,6 +56,7 @@ model product {
   category    String      @default("Clothing")
   price       Float
   featured    Boolean     @default(false)
+  stock       Int         @default(0)
   createdAt   DateTime    @default(now())
 
   orderitem   orderitem[]
@@ -65,23 +64,23 @@ model product {
 }
 
 model user {
-  id               Int       @id @default(autoincrement())
-  username         String
-  email            String    @unique
-  password         String
-  role             String    @default("USER")
-  resetOtp         String?
-  resetOtpExpiry   DateTime?
-  createdAt        DateTime  @default(now())
+  id             Int       @id @default(autoincrement())
+  username       String
+  email          String    @unique
+  password       String
+  role           String    @default("USER")
+  resetOtp       String?
+  resetOtpExpiry DateTime?
+  createdAt      DateTime  @default(now())
 
-  orders           order[]
-  reviews          review[]
+  orders         order[]
+  reviews        review[]
 }
 
 model review {
   id        Int      @id @default(autoincrement())
   rating    Int
-  comment   String  @db.Text
+  comment   String   @db.Text
   userId    Int
   productId Int
   createdAt DateTime @default(now())
@@ -96,41 +95,39 @@ model review {
 }
 
 model adminsetting {
-  id                 Int      @id @default(1)
-  storeName          String   @default("Style Avenue")
-  storeEmail         String   @default("support@styleavenue.pk")
-  phoneNumber        String   @default("+92 312 6779452")
-  currency           String   @default("PKR")
-  shippingFee        Float    @default(500)
-  freeShippingLimit  Float    @default(50000)
-  storeAddress       String   @db.Text
-
-  storeLogoUrl       String?  @db.LongText
-  whatsappNumber     String?
-  instagramUrl       String?  @db.LongText
-  facebookUrl        String?  @db.LongText
-  supportHours       String   @default("Monday - Saturday: 10:00 AM - 9:00 PM")
-  taxPercentage      Float    @default(0)
-  codEnabled         Boolean  @default(true)
-  freeShippingEnabled Boolean @default(true)
-  orderPrefix        String   @default("SA")
-  lowStockAlertLimit Int      @default(5)
-  maintenanceMode    Boolean  @default(false)
-
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  id                  Int      @id @default(1)
+  storeName           String   @default("Style Avenue")
+  storeEmail          String   @default("support@styleavenue.pk")
+  phoneNumber         String   @default("+92 312 6779452")
+  currency            String   @default("PKR")
+  shippingFee         Float    @default(500)
+  freeShippingLimit   Float    @default(50000)
+  storeAddress        String   @db.Text
+  storeLogoUrl        String?  @db.LongText
+  whatsappNumber      String?
+  instagramUrl        String?  @db.LongText
+  facebookUrl         String?  @db.LongText
+  supportHours        String   @default("Monday - Saturday: 10:00 AM - 9:00 PM")
+  taxPercentage       Float    @default(0)
+  codEnabled          Boolean  @default(true)
+  freeShippingEnabled Boolean  @default(true)
+  orderPrefix         String   @default("SA")
+  lowStockAlertLimit  Int      @default(5)
+  maintenanceMode     Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 }
 
 model coupon {
-  id           Int      @id @default(autoincrement())
-  code         String   @unique
+  id           Int       @id @default(autoincrement())
+  code         String    @unique
   type         String
   value        Float
-  minimumOrder Float    @default(0)
+  minimumOrder Float     @default(0)
   expiryDate   DateTime?
-  usageLimit   Int      @default(0)
-  usedCount    Int      @default(0)
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  usageLimit   Int       @default(0)
+  usedCount    Int       @default(0)
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 }

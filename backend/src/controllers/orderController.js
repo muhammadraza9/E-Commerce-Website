@@ -21,6 +21,12 @@ exports.createOrder = async (req, res) => {
       items,
     } = req.body;
 
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({
+        message: "Order items are required",
+      });
+    }
+
     const userId = req.user?.id;
 
     const finalSubtotal =
@@ -43,57 +49,105 @@ exports.createOrder = async (req, res) => {
 
     const finalCouponCode = couponCode ? couponCode.trim().toUpperCase() : null;
 
-    const trackingId =
-      "TRK-" + Math.random().toString(36).substring(2, 8).toUpperCase();
+    const productIds = items.map((item) => Number(item.productId));
 
-    const order = await prisma.order.create({
-      data: {
-        trackingId,
-        userId,
-        customer,
-        email,
-        phone,
-        address,
-
-        subtotal: finalSubtotal,
-        discountAmount: finalDiscountAmount,
-        couponCode: finalCouponCode,
-        shippingFee: finalShippingFee,
-        taxAmount: finalTaxAmount,
-        taxPercentage: finalTaxPercentage,
-        grandTotal: finalGrandTotal,
-
-        total: finalGrandTotal,
-        paymentMethod: paymentMethod || "COD",
-
-        items: {
-          create: items.map((item) => ({
-            productId: Number(item.productId),
-            quantity: Number(item.quantity),
-            price: Number(item.price),
-          })),
+    const products = await prisma.product.findMany({
+      where: {
+        id: {
+          in: productIds,
         },
       },
-
-      include: {
-        items: true,
+      select: {
+        id: true,
+        name: true,
+        stock: true,
       },
     });
 
-    if (finalCouponCode) {
-      try {
-        await prisma.coupon.update({
-          where: { code: finalCouponCode },
+    for (const item of items) {
+      const product = products.find(
+        (p) => p.id === Number(item.productId)
+      );
+
+      if (!product) {
+        return res.status(404).json({
+          message: `Product not found`,
+        });
+      }
+
+      if (Number(product.stock) < Number(item.quantity)) {
+        return res.status(400).json({
+          message: `${product.name} has only ${product.stock} item(s) left in stock`,
+        });
+      }
+    }
+
+    const trackingId =
+      "TRK-" + Math.random().toString(36).substring(2, 8).toUpperCase();
+
+    const order = await prisma.$transaction(async (tx) => {
+      const createdOrder = await tx.order.create({
+        data: {
+          trackingId,
+          userId,
+          customer,
+          email,
+          phone,
+          address,
+
+          subtotal: finalSubtotal,
+          discountAmount: finalDiscountAmount,
+          couponCode: finalCouponCode,
+          shippingFee: finalShippingFee,
+          taxAmount: finalTaxAmount,
+          taxPercentage: finalTaxPercentage,
+          grandTotal: finalGrandTotal,
+
+          total: finalGrandTotal,
+          paymentMethod: paymentMethod || "COD",
+
+          items: {
+            create: items.map((item) => ({
+              productId: Number(item.productId),
+              quantity: Number(item.quantity),
+              price: Number(item.price),
+            })),
+          },
+        },
+
+        include: {
+          items: true,
+        },
+      });
+
+      for (const item of items) {
+        await tx.product.update({
+          where: {
+            id: Number(item.productId),
+          },
+          data: {
+            stock: {
+              decrement: Number(item.quantity),
+            },
+          },
+        });
+      }
+
+      if (finalCouponCode) {
+        await tx.coupon.update({
+          where: {
+            code: finalCouponCode,
+          },
           data: {
             usedCount: {
               increment: 1,
             },
           },
         });
-      } catch (couponErr) {
-        console.error("❌ Coupon Used Count Error:", couponErr.message);
       }
-    }
+
+      return createdOrder;
+    });
 
     try {
       await sendEmail({
