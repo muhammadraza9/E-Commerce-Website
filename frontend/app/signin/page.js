@@ -23,7 +23,11 @@ export default function SigninPage() {
       const prefillEmail = sessionStorage.getItem("prefillEmail");
 
       if (prefillEmail) {
-        setFormData((prev) => ({ ...prev, email: prefillEmail }));
+        setFormData((prev) => ({
+          ...prev,
+          email: prefillEmail,
+        }));
+
         sessionStorage.removeItem("prefillEmail");
       }
 
@@ -89,7 +93,9 @@ export default function SigninPage() {
 
       <div
         className="absolute inset-0 z-0"
-        style={{ background: "rgba(10, 22, 40, 0.85)" }}
+        style={{
+          background: "rgba(10, 22, 40, 0.85)",
+        }}
       />
 
       <form
@@ -105,9 +111,7 @@ export default function SigninPage() {
         </h1>
 
         <div className="mb-5">
-          <label className="block text-white mb-2">
-            Email
-          </label>
+          <label className="block text-white mb-2">Email</label>
 
           <input
             type="email"
@@ -125,10 +129,8 @@ export default function SigninPage() {
           />
         </div>
 
-        <div className="mb-8">
-          <label className="block text-white mb-2">
-            Password
-          </label>
+        <div className="mb-3">
+          <label className="block text-white mb-2">Password</label>
 
           <input
             type="password"
@@ -146,15 +148,24 @@ export default function SigninPage() {
           />
         </div>
 
+        <div className="text-right mb-8">
+          <Link
+            href="/forgot-password"
+            className="text-sm text-[#D4AF37] hover:text-white hover:underline transition"
+          >
+            Forgot Password?
+          </Link>
+        </div>
+
         <button
           disabled={loading}
-          className="w-full bg-[#0B1F33] hover:bg-[#D4AF37] text-white border border-[#D4AF37] py-4 rounded-xl font-semibold text-lg transition-colors duration-200 disabled:opacity-60 cursor-pointer"
+          className="w-full bg-[#0B1F33] hover:bg-[#D4AF37] text-white hover:text-black border border-[#D4AF37] py-4 rounded-xl font-semibold text-lg transition-colors duration-200 disabled:opacity-60 cursor-pointer"
         >
           {loading ? "Signing In..." : "Sign In"}
         </button>
 
         <p className="text-gray-400 text-center mt-6">
-          Don't have an account?{" "}
+          Don&apos;t have an account?{" "}
           <Link href="/signup" className="text-[#D4AF37] hover:text-white">
             Sign Up
           </Link>

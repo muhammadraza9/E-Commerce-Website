@@ -6,6 +6,10 @@ import { generateInvoicePDF } from "@/utils/invoiceGenerator";
 import AdminOrdersSkeleton from "@/components/skeletons/AdminOrdersSkeleton";
 import api from "@/services/api";
 
+const formatCurrency = (amount) => {
+  return `Rs ${Number(amount || 0).toLocaleString("en-PK")}`;
+};
+
 export default function AdminOrdersPage() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -83,7 +87,8 @@ export default function AdminOrdersPage() {
       const matchesSearch =
         order.trackingId?.toLowerCase().includes(searchText) ||
         order.customer?.toLowerCase().includes(searchText) ||
-        order.email?.toLowerCase().includes(searchText);
+        order.email?.toLowerCase().includes(searchText) ||
+        order.couponCode?.toLowerCase().includes(searchText);
 
       const matchesStatus =
         statusFilter === "All" || order.status === statusFilter;
@@ -93,7 +98,12 @@ export default function AdminOrdersPage() {
   }, [orders, search, statusFilter]);
 
   const totalRevenue = orders.reduce(
-    (sum, order) => sum + Number(order.total || 0),
+    (sum, order) => sum + Number(order.grandTotal || order.total || 0),
+    0
+  );
+
+  const totalDiscount = orders.reduce(
+    (sum, order) => sum + Number(order.discountAmount || 0),
     0
   );
 
@@ -121,41 +131,27 @@ export default function AdminOrdersPage() {
         </h1>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
-        <div className="bg-slate-900 border border-slate-700 rounded-2xl p-5">
-          <p className="text-gray-400 text-sm">Total Orders</p>
-          <h2 className="text-2xl font-bold text-white mt-1">
-            {orders.length}
-          </h2>
-        </div>
-
-        <div className="bg-slate-900 border border-slate-700 rounded-2xl p-5">
-          <p className="text-gray-400 text-sm">Pending</p>
-          <h2 className="text-2xl font-bold text-yellow-400 mt-1">
-            {pendingOrders}
-          </h2>
-        </div>
-
-        <div className="bg-slate-900 border border-slate-700 rounded-2xl p-5">
-          <p className="text-gray-400 text-sm">Delivered</p>
-          <h2 className="text-2xl font-bold text-green-400 mt-1">
-            {deliveredOrders}
-          </h2>
-        </div>
-
-        <div className="bg-slate-900 border border-slate-700 rounded-2xl p-5">
-          <p className="text-gray-400 text-sm">Revenue</p>
-          <h2 className="text-2xl font-bold text-[#D4AF37] mt-1">
-            Rs {totalRevenue}
-          </h2>
-        </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 mb-8">
+        <StatCard title="Total Orders" value={orders.length} />
+        <StatCard title="Pending" value={pendingOrders} color="text-yellow-400" />
+        <StatCard title="Delivered" value={deliveredOrders} color="text-green-400" />
+        <StatCard
+          title="Discounts"
+          value={formatCurrency(totalDiscount)}
+          color="text-red-400"
+        />
+        <StatCard
+          title="Revenue"
+          value={formatCurrency(totalRevenue)}
+          color="text-[#D4AF37]"
+        />
       </div>
 
       <div className="bg-slate-900 border border-slate-700 rounded-2xl p-5 mb-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <input
             type="text"
-            placeholder="Search by tracking ID, customer or email..."
+            placeholder="Search by tracking ID, customer, email or coupon..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:border-[#D4AF37]"
@@ -186,22 +182,21 @@ export default function AdminOrdersPage() {
       ) : (
         <div className="w-full max-w-full rounded-2xl border border-slate-700 bg-slate-900 overflow-hidden">
           <div className="w-full overflow-x-auto scrollbar-hide">
-            <table className="w-full min-w-[1050px]">
+            <table className="w-full min-w-[1320px]">
               <thead>
                 <tr className="border-b border-slate-700 text-white">
-                  <th className="p-4 text-left whitespace-nowrap">
-                    Tracking ID
-                  </th>
-                  <th className="p-4 text-left whitespace-nowrap">
-                    Customer
-                  </th>
+                  <th className="p-4 text-left whitespace-nowrap">Tracking ID</th>
+                  <th className="p-4 text-left whitespace-nowrap">Customer</th>
                   <th className="p-4 text-left whitespace-nowrap">Email</th>
                   <th className="p-4 text-left whitespace-nowrap">Date</th>
-                  <th className="p-4 text-left whitespace-nowrap">Total</th>
+                  <th className="p-4 text-left whitespace-nowrap">Coupon</th>
+                  <th className="p-4 text-left whitespace-nowrap">Subtotal</th>
+                  <th className="p-4 text-left whitespace-nowrap">Discount</th>
+                  <th className="p-4 text-left whitespace-nowrap">Shipping</th>
+                  <th className="p-4 text-left whitespace-nowrap">Tax</th>
+                  <th className="p-4 text-left whitespace-nowrap">Grand Total</th>
                   <th className="p-4 text-left whitespace-nowrap">Status</th>
-                  <th className="p-4 text-left whitespace-nowrap">
-                    Update Status
-                  </th>
+                  <th className="p-4 text-left whitespace-nowrap">Update Status</th>
                   <th className="p-4 text-left whitespace-nowrap">Invoice</th>
                 </tr>
               </thead>
@@ -216,9 +211,7 @@ export default function AdminOrdersPage() {
                       {order.trackingId}
                     </td>
 
-                    <td className="p-4 whitespace-nowrap">
-                      {order.customer}
-                    </td>
+                    <td className="p-4 whitespace-nowrap">{order.customer}</td>
 
                     <td className="p-4 text-gray-300 whitespace-nowrap">
                       {order.email}
@@ -228,8 +221,34 @@ export default function AdminOrdersPage() {
                       {new Date(order.createdAt).toLocaleDateString("en-PK")}
                     </td>
 
-                    <td className="p-4 font-semibold whitespace-nowrap">
-                      Rs {order.total}
+                    <td className="p-4 whitespace-nowrap">
+                      {order.couponCode ? (
+                        <span className="px-3 py-1 rounded-full bg-[#D4AF37]/20 text-[#D4AF37] text-xs font-bold">
+                          {order.couponCode}
+                        </span>
+                      ) : (
+                        <span className="text-gray-500">No Coupon</span>
+                      )}
+                    </td>
+
+                    <td className="p-4 text-gray-300 whitespace-nowrap">
+                      {formatCurrency(order.subtotal)}
+                    </td>
+
+                    <td className="p-4 text-red-400 font-semibold whitespace-nowrap">
+                      - {formatCurrency(order.discountAmount)}
+                    </td>
+
+                    <td className="p-4 text-gray-300 whitespace-nowrap">
+                      {formatCurrency(order.shippingFee)}
+                    </td>
+
+                    <td className="p-4 text-gray-300 whitespace-nowrap">
+                      {formatCurrency(order.taxAmount)}
+                    </td>
+
+                    <td className="p-4 font-bold text-[#D4AF37] whitespace-nowrap">
+                      {formatCurrency(order.grandTotal || order.total)}
                     </td>
 
                     <td className="p-4 whitespace-nowrap">
@@ -273,6 +292,15 @@ export default function AdminOrdersPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function StatCard({ title, value, color = "text-white" }) {
+  return (
+    <div className="bg-slate-900 border border-slate-700 rounded-2xl p-5">
+      <p className="text-gray-400 text-sm">{title}</p>
+      <h2 className={`text-2xl font-bold mt-1 ${color}`}>{value}</h2>
     </div>
   );
 }

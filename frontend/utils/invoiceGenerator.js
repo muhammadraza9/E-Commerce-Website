@@ -9,6 +9,7 @@ const DEFAULT_SETTINGS = {
   storeAddress: "Style Avenue, Main Market, Rawalpindi, Punjab, Pakistan",
   shippingFee: 0,
   taxPercentage: 0,
+  orderPrefix: "SA",
 };
 
 const formatCurrency = (amount) => {
@@ -28,6 +29,7 @@ const formatDate = (date) => {
 const getSettings = async () => {
   try {
     const res = await api.get("/admin-settings");
+
     return {
       ...DEFAULT_SETTINGS,
       ...res.data,
@@ -53,6 +55,7 @@ export const generateInvoicePDF = async (order, type = "user") => {
   const gold = [212, 175, 55];
   const lightGray = [245, 245, 245];
   const darkText = [30, 30, 30];
+  const red = [200, 30, 30];
 
   doc.setFillColor(...navy);
   doc.rect(0, 0, pageWidth, 42, "F");
@@ -66,7 +69,11 @@ export const generateInvoicePDF = async (order, type = "user") => {
   doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
   doc.text("Premium Fashion Store", 14, 25);
-  doc.text(isAdmin ? "Admin Order Invoice" : "Official Customer Invoice", 14, 32);
+  doc.text(
+    isAdmin ? "Admin Order Invoice" : "Official Customer Invoice",
+    14,
+    32
+  );
 
   doc.setTextColor(...gold);
   doc.setFontSize(18);
@@ -76,9 +83,14 @@ export const generateInvoicePDF = async (order, type = "user") => {
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
-  doc.text(`Invoice No: ${settings.orderPrefix || "SA"}-${order.id}`, pageWidth - 14, 25, {
-    align: "right",
-  });
+
+  doc.text(
+    `Invoice No: ${settings.orderPrefix || "SA"}-${order.id}`,
+    pageWidth - 14,
+    25,
+    { align: "right" }
+  );
+
   doc.text(`Tracking: ${order.trackingId || "N/A"}`, pageWidth - 14, 32, {
     align: "right",
   });
@@ -155,14 +167,14 @@ export const generateInvoicePDF = async (order, type = "user") => {
       const productName = item.product?.name || `Product ${index + 1}`;
       const quantity = Number(item.quantity || 1);
       const price = Number(item.price || 0);
-      const subtotal = quantity * price;
+      const rowSubtotal = quantity * price;
 
       return [
         index + 1,
         productName,
         quantity,
         formatCurrency(price),
-        formatCurrency(subtotal),
+        formatCurrency(rowSubtotal),
       ];
     }) || [];
 
@@ -195,18 +207,20 @@ export const generateInvoicePDF = async (order, type = "user") => {
 
   const finalY = doc.lastAutoTable.finalY + 12;
 
-  const subtotal =
+  const fallbackSubtotal =
     order.items?.reduce((sum, item) => {
       return sum + Number(item.price || 0) * Number(item.quantity || 1);
     }, 0) || 0;
 
-  const grandTotal = Number(order.total || subtotal);
-  const taxPercentage = Number(settings.taxPercentage || 0);
-  const taxAmount = Math.round((subtotal * taxPercentage) / 100);
-  const shipping = Math.max(grandTotal - subtotal - taxAmount, 0);
+  const subtotal = Number(order.subtotal ?? fallbackSubtotal);
+  const discount = Number(order.discountAmount || 0);
+  const shipping = Number(order.shippingFee || 0);
+  const taxAmount = Number(order.taxAmount || 0);
+  const taxPercentage = Number(order.taxPercentage || 0);
+  const grandTotal = Number(order.grandTotal || order.total || 0);
 
   doc.setFillColor(...lightGray);
-  doc.roundedRect(120, finalY - 4, 76, 46, 3, 3, "F");
+  doc.roundedRect(120, finalY - 4, 76, 54, 3, 3, "F");
 
   doc.setTextColor(...darkText);
   doc.setFontSize(10);
@@ -215,20 +229,35 @@ export const generateInvoicePDF = async (order, type = "user") => {
   doc.text("Subtotal", 126, finalY + 4);
   doc.text(formatCurrency(subtotal), 190, finalY + 4, { align: "right" });
 
-  doc.text("Shipping", 126, finalY + 12);
-  doc.text(formatCurrency(shipping), 190, finalY + 12, { align: "right" });
+  doc.text(
+    order.couponCode ? `Discount (${order.couponCode})` : "Discount",
+    126,
+    finalY + 12
+  );
 
-  doc.text(`Tax (${taxPercentage}%)`, 126, finalY + 20);
-  doc.text(formatCurrency(taxAmount), 190, finalY + 20, { align: "right" });
+  doc.setTextColor(...red);
+  doc.text(`-${formatCurrency(discount)}`, 190, finalY + 12, {
+    align: "right",
+  });
+
+  doc.setTextColor(...darkText);
+  doc.text("Shipping", 126, finalY + 20);
+  doc.text(formatCurrency(shipping), 190, finalY + 20, { align: "right" });
+
+  doc.text(`Tax (${taxPercentage}%)`, 126, finalY + 28);
+  doc.text(formatCurrency(taxAmount), 190, finalY + 28, { align: "right" });
 
   doc.setDrawColor(210, 210, 210);
-  doc.line(126, finalY + 25, 190, finalY + 25);
+  doc.line(126, finalY + 33, 190, finalY + 33);
 
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...gold);
   doc.setFontSize(12);
-  doc.text("Grand Total", 126, finalY + 35);
-  doc.text(formatCurrency(grandTotal), 190, finalY + 35, { align: "right" });
+
+  doc.text("Grand Total", 126, finalY + 43);
+  doc.text(formatCurrency(grandTotal), 190, finalY + 43, {
+    align: "right",
+  });
 
   doc.setTextColor(90, 90, 90);
   doc.setFontSize(9);
@@ -239,13 +268,13 @@ export const generateInvoicePDF = async (order, type = "user") => {
       ? "Admin copy: This invoice includes customer and payment information."
       : "Customer copy: Please keep this invoice for your order record.",
     14,
-    finalY + 56
+    finalY + 64
   );
 
   doc.text(
     "Note: This invoice is computer generated and does not require a signature.",
     14,
-    finalY + 63
+    finalY + 71
   );
 
   doc.setDrawColor(...gold);
@@ -253,14 +282,14 @@ export const generateInvoicePDF = async (order, type = "user") => {
 
   doc.setTextColor(...darkText);
   doc.setFontSize(9);
-  doc.text(`Thank you for shopping with ${settings.storeName}.`, 14, pageHeight - 17);
+  doc.text(
+    `Thank you for shopping with ${settings.storeName}.`,
+    14,
+    pageHeight - 17
+  );
 
   doc.setTextColor(100, 100, 100);
-  doc.text(
-    `${settings.storeEmail} | ${settings.phoneNumber}`,
-    14,
-    pageHeight - 11
-  );
+  doc.text(`${settings.storeEmail} | ${settings.phoneNumber}`, 14, pageHeight - 11);
 
   doc.text(settings.storeAddress || "", 14, pageHeight - 6);
 

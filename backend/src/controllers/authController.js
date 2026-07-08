@@ -1,6 +1,8 @@
 const prisma = require("../config/db");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
+const sendEmail = require("../utils/sendEmail");
 
 exports.register = async (req, res) => {
   try {
@@ -82,7 +84,8 @@ exports.login = async (req, res) => {
       }
     );
 
-    const { password: userPassword, ...safeUser } = user;
+    const { password: userPassword, resetToken, resetTokenExpiry, ...safeUser } =
+      user;
 
     res.json({
       token,
@@ -92,6 +95,138 @@ exports.login = async (req, res) => {
   } catch (err) {
     res.status(500).json({
       message: "Login failed",
+      error: err.message,
+    });
+  }
+};
+
+exports.forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email || email.trim() === "") {
+      return res.status(400).json({
+        message: "Email is required",
+      });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: email.trim().toLowerCase() },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        message: "No account found with this email",
+      });
+    }
+
+    const resetToken = crypto.randomBytes(32).toString("hex");
+    const resetTokenExpiry = new Date(Date.now() + 15 * 60 * 1000);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        resetToken,
+        resetTokenExpiry,
+      },
+    });
+
+    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+    const resetLink = `${frontendUrl}/reset-password/${resetToken}`;
+
+    await sendEmail({
+      to: user.email,
+      subject: "Reset Your Password - Style Avenue",
+      html: `
+        <div style="font-family:Arial,sans-serif;background:#0B1F33;padding:30px;color:#ffffff;">
+          <div style="max-width:600px;margin:auto;background:#081421;border:1px solid #D4AF37;border-radius:14px;padding:30px;">
+            <h1 style="color:#D4AF37;margin-bottom:10px;">Style Avenue</h1>
+            <h2 style="margin-bottom:15px;">Reset Your Password</h2>
+
+            <p>Hello <strong>${user.username}</strong>,</p>
+
+            <p>You requested to reset your password. Click the button below to create a new password.</p>
+
+            <p style="margin:25px 0;">
+              <a href="${resetLink}" style="background:#D4AF37;color:#000;padding:14px 24px;border-radius:10px;text-decoration:none;font-weight:bold;display:inline-block;">
+                Reset Password
+              </a>
+            </p>
+
+            <p>This link will expire in <strong>15 minutes</strong>.</p>
+
+            <p>If you did not request this, you can safely ignore this email.</p>
+
+            <hr style="border:none;border-top:1px solid #334155;margin:25px 0;" />
+
+            <p style="font-size:12px;color:#94a3b8;">
+              If the button does not work, copy and paste this link into your browser:<br/>
+              ${resetLink}
+            </p>
+          </div>
+        </div>
+      `,
+    });
+
+    res.json({
+      message: "Password reset link sent to your email",
+    });
+  } catch (err) {
+    res.status(500).json({
+      message: "Failed to send reset email",
+      error: err.message,
+    });
+  }
+};
+
+exports.resetPassword = async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+
+    if (!token || !newPassword) {
+      return res.status(400).json({
+        message: "Token and new password are required",
+      });
+    }
+
+    if (newPassword.length < 4 || newPassword.length > 9) {
+      return res.status(400).json({
+        message: "Password must be 4 to 9 characters",
+      });
+    }
+
+    const user = await prisma.user.findFirst({
+      where: {
+        resetToken: token,
+        resetTokenExpiry: {
+          gt: new Date(),
+        },
+      },
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        message: "Invalid or expired reset link",
+      });
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashedPassword,
+        resetToken: null,
+        resetTokenExpiry: null,
+      },
+    });
+
+    res.json({
+      message: "Password reset successfully",
+    });
+  } catch (err) {
+    res.status(500).json({
+      message: "Password reset failed",
       error: err.message,
     });
   }
