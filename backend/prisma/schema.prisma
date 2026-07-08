@@ -8,28 +8,30 @@ datasource db {
 }
 
 model order {
-  id            Int         @id @default(autoincrement())
-  trackingId    String      @unique
-  customer      String
-  email         String
-  phone         String
-  address       String
+  id              Int         @id @default(autoincrement())
+  trackingId      String      @unique
+  customer        String
+  email           String
+  phone           String
+  address         String
 
-  subtotal      Float       @default(0)
-  shippingFee   Float       @default(0)
-  taxAmount     Float       @default(0)
-  taxPercentage Float       @default(0)
-  grandTotal    Float       @default(0)
+  subtotal        Float       @default(0)
+  discountAmount  Float       @default(0)
+  couponCode      String?
+  shippingFee     Float       @default(0)
+  taxAmount       Float       @default(0)
+  taxPercentage   Float       @default(0)
+  grandTotal      Float       @default(0)
 
-  total         Float
-  status        String      @default("Pending")
-  createdAt     DateTime    @default(now())
-  paymentMethod String      @default("COD")
-  paymentStatus String      @default("PENDING")
-  txnRefNo      String?
-  userId        Int?
-  user          user?       @relation(fields: [userId], references: [id])
-  items         orderitem[]
+  total           Float
+  status          String      @default("Pending")
+  createdAt       DateTime    @default(now())
+  paymentMethod   String      @default("COD")
+  paymentStatus   String      @default("PENDING")
+  txnRefNo        String?
+  userId          Int?
+  user            user?       @relation(fields: [userId], references: [id])
+  items           orderitem[]
 
   @@index([userId], map: "order_userId_fkey")
 }

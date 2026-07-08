@@ -11,6 +11,8 @@ exports.createOrder = async (req, res) => {
       address,
       total,
       subtotal,
+      discountAmount,
+      couponCode,
       shippingFee,
       taxAmount,
       taxPercentage,
@@ -24,17 +26,22 @@ exports.createOrder = async (req, res) => {
     const finalSubtotal =
       Number(subtotal) ||
       items.reduce(
-        (sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 1),
+        (sum, item) =>
+          sum + Number(item.price || 0) * Number(item.quantity || 1),
         0
       );
 
+    const finalDiscountAmount = Number(discountAmount || 0);
     const finalShippingFee = Number(shippingFee || 0);
     const finalTaxAmount = Number(taxAmount || 0);
     const finalTaxPercentage = Number(taxPercentage || 0);
+
     const finalGrandTotal =
       Number(grandTotal) ||
       Number(total) ||
-      finalSubtotal + finalShippingFee + finalTaxAmount;
+      finalSubtotal - finalDiscountAmount + finalShippingFee + finalTaxAmount;
+
+    const finalCouponCode = couponCode ? couponCode.trim().toUpperCase() : null;
 
     const trackingId =
       "TRK-" + Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -49,6 +56,8 @@ exports.createOrder = async (req, res) => {
         address,
 
         subtotal: finalSubtotal,
+        discountAmount: finalDiscountAmount,
+        couponCode: finalCouponCode,
         shippingFee: finalShippingFee,
         taxAmount: finalTaxAmount,
         taxPercentage: finalTaxPercentage,
@@ -71,6 +80,21 @@ exports.createOrder = async (req, res) => {
       },
     });
 
+    if (finalCouponCode) {
+      try {
+        await prisma.coupon.update({
+          where: { code: finalCouponCode },
+          data: {
+            usedCount: {
+              increment: 1,
+            },
+          },
+        });
+      } catch (couponErr) {
+        console.error("❌ Coupon Used Count Error:", couponErr.message);
+      }
+    }
+
     try {
       await sendEmail({
         to: email,
@@ -82,7 +106,13 @@ exports.createOrder = async (req, res) => {
             <p>Your order has been placed successfully.</p>
             <p><strong>Tracking ID:</strong> ${trackingId}</p>
             <p><strong>Payment Method:</strong> ${paymentMethod || "COD"}</p>
+            ${
+              finalCouponCode
+                ? `<p><strong>Coupon:</strong> ${finalCouponCode}</p>`
+                : ""
+            }
             <p><strong>Subtotal:</strong> Rs ${finalSubtotal}</p>
+            <p><strong>Discount:</strong> Rs ${finalDiscountAmount}</p>
             <p><strong>Shipping:</strong> Rs ${finalShippingFee}</p>
             <p><strong>Tax:</strong> Rs ${finalTaxAmount}</p>
             <p><strong>Total:</strong> Rs ${finalGrandTotal}</p>
@@ -108,7 +138,13 @@ exports.createOrder = async (req, res) => {
             <p><strong>Address:</strong> ${address}</p>
             <p><strong>Tracking ID:</strong> ${trackingId}</p>
             <p><strong>Payment Method:</strong> ${paymentMethod || "COD"}</p>
+            ${
+              finalCouponCode
+                ? `<p><strong>Coupon:</strong> ${finalCouponCode}</p>`
+                : ""
+            }
             <p><strong>Subtotal:</strong> Rs ${finalSubtotal}</p>
+            <p><strong>Discount:</strong> Rs ${finalDiscountAmount}</p>
             <p><strong>Shipping:</strong> Rs ${finalShippingFee}</p>
             <p><strong>Tax:</strong> Rs ${finalTaxAmount}</p>
             <p><strong>Total:</strong> Rs ${finalGrandTotal}</p>

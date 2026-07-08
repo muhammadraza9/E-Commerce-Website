@@ -28,6 +28,11 @@ export default function CheckoutPage() {
   const [orderPlaced, setOrderPlaced] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
 
+  const [couponCode, setCouponCode] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState(null);
+  const [discountAmount, setDiscountAmount] = useState(0);
+  const [couponLoading, setCouponLoading] = useState(false);
+
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -92,8 +97,9 @@ export default function CheckoutPage() {
     subtotal >= freeShippingLimit;
 
   const finalShipping = isFreeShipping ? 0 : shippingFee;
-  const taxAmount = Math.round((subtotal * taxPercentage) / 100);
-  const grandTotal = subtotal + finalShipping + taxAmount;
+  const taxableAmount = Math.max(subtotal - discountAmount, 0);
+  const taxAmount = Math.round((taxableAmount * taxPercentage) / 100);
+  const grandTotal = taxableAmount + finalShipping + taxAmount;
 
   const paymentMethods = [
     ...(settings.codEnabled
@@ -102,6 +108,43 @@ export default function CheckoutPage() {
     { id: "JAZZCASH", label: "JazzCash" },
     { id: "EASYPAISA", label: "EasyPaisa" },
   ];
+
+  const applyCoupon = async () => {
+    if (!couponCode.trim()) {
+      showErrorToast("Please enter coupon code");
+      return;
+    }
+
+    try {
+      setCouponLoading(true);
+
+      const res = await api.post("/coupons/apply", {
+        code: couponCode,
+        subtotal,
+      });
+
+      setAppliedCoupon(res.data.coupon);
+      setDiscountAmount(Number(res.data.discountAmount || 0));
+
+      showSuccessToast("Coupon applied successfully");
+    } catch (error) {
+      setAppliedCoupon(null);
+      setDiscountAmount(0);
+
+      showErrorToast(
+        error?.response?.data?.message || "Invalid coupon code"
+      );
+    } finally {
+      setCouponLoading(false);
+    }
+  };
+
+  const removeCoupon = () => {
+    setCouponCode("");
+    setAppliedCoupon(null);
+    setDiscountAmount(0);
+    showSuccessToast("Coupon removed");
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -134,7 +177,16 @@ export default function CheckoutPage() {
         phone: formData.phone,
         address: formData.address,
         paymentMethod: formData.paymentMethod,
+
+        subtotal,
+        discountAmount,
+        couponCode: appliedCoupon?.code || null,
+        shippingFee: finalShipping,
+        taxAmount,
+        taxPercentage,
+        grandTotal,
         total: grandTotal,
+
         items: itemsToCheckout.map((item) => ({
           productId: item.id,
           quantity: item.quantity,
@@ -147,7 +199,6 @@ export default function CheckoutPage() {
       localStorage.setItem("trackingId", res.data.trackingId);
 
       setOrderPlaced(true);
-
       showSuccessToast("Order placed successfully");
 
       removeCheckedOutItems(itemsToCheckout.map((item) => item.id));
@@ -244,8 +295,60 @@ export default function CheckoutPage() {
               ))}
             </div>
 
+            <div className="mt-5 pt-4 border-t border-[#D4AF37]/20">
+              <div className="flex flex-col sm:flex-row gap-3">
+                <input
+                  type="text"
+                  value={couponCode}
+                  onChange={(e) =>
+                    setCouponCode(e.target.value.toUpperCase())
+                  }
+                  disabled={Boolean(appliedCoupon)}
+                  placeholder="Enter coupon code"
+                  className="flex-1 border text-white placeholder-gray-400 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37] disabled:opacity-60"
+                  style={{
+                    backgroundColor: "rgba(10,22,40,0.8)",
+                    borderColor: "rgba(212,175,55,0.2)",
+                  }}
+                />
+
+                {appliedCoupon ? (
+                  <button
+                    type="button"
+                    onClick={removeCoupon}
+                    className="bg-red-600 text-white px-5 py-3 rounded-lg font-semibold hover:bg-red-700 transition"
+                  >
+                    Remove
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={applyCoupon}
+                    disabled={couponLoading}
+                    className="bg-[#D4AF37] text-black px-5 py-3 rounded-lg font-semibold hover:bg-yellow-400 transition disabled:opacity-60"
+                  >
+                    {couponLoading ? "Applying..." : "Apply"}
+                  </button>
+                )}
+              </div>
+
+              {appliedCoupon && (
+                <p className="text-green-400 text-sm mt-3">
+                  Coupon {appliedCoupon.code} applied successfully.
+                </p>
+              )}
+            </div>
+
             <div className="mt-5 pt-4 space-y-3 border-t border-[#D4AF37]/20">
               <SummaryRow label="Subtotal" value={`Rs ${subtotal}`} />
+
+              {discountAmount > 0 && (
+                <SummaryRow
+                  label={`Discount (${appliedCoupon?.code})`}
+                  value={`- Rs ${discountAmount}`}
+                  danger
+                />
+              )}
 
               <SummaryRow
                 label="Shipping"
@@ -382,13 +485,17 @@ function Input({ name, value, onChange, placeholder, type = "text" }) {
   );
 }
 
-function SummaryRow({ label, value, highlight = false }) {
+function SummaryRow({ label, value, highlight = false, danger = false }) {
   return (
     <div className="flex justify-between items-center text-sm">
       <span className="text-gray-300">{label}</span>
       <span
         className={`font-semibold ${
-          highlight ? "text-green-400" : "text-gray-200"
+          danger
+            ? "text-red-400"
+            : highlight
+            ? "text-green-400"
+            : "text-gray-200"
         }`}
       >
         {value}
