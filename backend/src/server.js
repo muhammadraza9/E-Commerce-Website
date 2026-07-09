@@ -11,6 +11,7 @@ const paymentRoutes = require("./routes/paymentRoutes");
 const adminSettingRoutes = require("./routes/adminSettingRoutes");
 const couponRoutes = require("./routes/couponRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
+const returnRequestRoutes = require("./routes/returnRequestRoutes");
 
 
 
@@ -76,6 +77,7 @@ app.use("/api/payment", paymentRoutes);
 app.use("/api/admin-settings", adminSettingRoutes);
 app.use("/api/coupons", couponRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/return-requests", returnRequestRoutes);
 /* ===========================
    404
 =========================== */

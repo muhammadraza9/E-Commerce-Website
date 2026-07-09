@@ -1,0 +1,12 @@
+CREATE TABLE IF NOT EXISTS `returnrequest` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `orderId` INT NOT NULL,
+  `customer` VARCHAR(191) NOT NULL,
+  `email` VARCHAR(191) NOT NULL,
+  `reason` VARCHAR(191) NOT NULL,
+  `message` TEXT NULL,
+  `status` VARCHAR(191) NOT NULL DEFAULT 'Pending',
+  `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updatedAt` DATETIME(3) NOT NULL,
+  PRIMARY KEY (`id`)
+);

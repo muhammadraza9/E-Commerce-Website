@@ -140,3 +140,15 @@ model notification {
   isRead    Boolean  @default(false)
   createdAt DateTime @default(now())
 }
+
+model returnrequest {
+  id        Int      @id @default(autoincrement())
+  orderId   Int
+  customer  String
+  email     String
+  reason    String
+  message   String?  @db.Text
+  status    String   @default("Pending")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
