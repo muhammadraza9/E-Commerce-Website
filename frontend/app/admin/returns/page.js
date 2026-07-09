@@ -71,7 +71,7 @@ export default function AdminReturnsPage() {
       </div>
 
       {requests.length === 0 ? (
-        <div className="bg-slate-900 border border-slate-700 rounded-2xl p-12 text-center">
+        <div className="bg-[#0d1117] border border-slate-700 rounded-2xl p-12 text-center">
           <p className="text-5xl mb-4">📦</p>
           <h2 className="text-white text-xl font-bold">No Return Requests</h2>
           <p className="text-gray-400 mt-2">
@@ -79,14 +79,14 @@ export default function AdminReturnsPage() {
           </p>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-5">
           {requests.map((item) => (
             <div
               key={item.id}
-              className="bg-slate-900 border border-slate-700 rounded-2xl p-5"
+              className="bg-[#0d1117] border border-slate-700 rounded-2xl p-5 sm:p-6 hover:border-[#D4AF37]/50 transition"
             >
-              <div className="flex flex-col lg:flex-row justify-between gap-5">
-                <div className="space-y-2">
+              <div className="flex flex-col lg:flex-row justify-between items-start gap-6">
+                <div className="space-y-2 flex-1 min-w-0">
                   <div className="flex flex-wrap items-center gap-3">
                     <h2 className="text-white font-bold text-lg">
                       Order #{item.orderId}
@@ -94,7 +94,7 @@ export default function AdminReturnsPage() {
 
                     <span
                       className={`px-3 py-1 rounded-full text-xs font-bold border ${
-                        statusClass[item.status]
+                        statusClass[item.status] || statusClass.Pending
                       }`}
                     >
                       {item.status}
@@ -102,20 +102,23 @@ export default function AdminReturnsPage() {
                   </div>
 
                   <p className="text-gray-300">
-                    <strong>Customer:</strong> {item.customer}
+                    <strong className="text-white">Customer:</strong>{" "}
+                    {item.customer}
                   </p>
 
                   <p className="text-gray-300">
-                    <strong>Email:</strong> {item.email}
+                    <strong className="text-white">Email:</strong> {item.email}
                   </p>
 
                   <p className="text-gray-300">
-                    <strong>Reason:</strong> {item.reason}
+                    <strong className="text-white">Reason:</strong>{" "}
+                    {item.reason}
                   </p>
 
                   {item.message && (
                     <p className="text-gray-400">
-                      <strong>Message:</strong> {item.message}
+                      <strong className="text-white">Message:</strong>{" "}
+                      {item.message}
                     </p>
                   )}
 
@@ -124,11 +127,11 @@ export default function AdminReturnsPage() {
                   </p>
                 </div>
 
-                <div className="flex flex-col sm:flex-row lg:flex-col gap-3 shrink-0">
+                <div className="flex flex-col sm:flex-row lg:flex-col items-start lg:items-end gap-3 shrink-0">
                   <select
                     value={item.status}
                     onChange={(e) => updateStatus(item.id, e.target.value)}
-                    className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white outline-none focus:border-[#D4AF37]"
+                    className="w-44 bg-[#071827] border border-[#D4AF37]/30 rounded-lg px-4 py-2.5 text-white text-sm outline-none focus:border-[#D4AF37]"
                   >
                     {statuses.map((status) => (
                       <option key={status}>{status}</option>
@@ -137,7 +140,7 @@ export default function AdminReturnsPage() {
 
                   <button
                     onClick={() => deleteRequest(item.id)}
-                    className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-red-700"
+                    className="w-44 bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-lg text-sm font-semibold transition cursor-pointer"
                   >
                     Delete
                   </button>

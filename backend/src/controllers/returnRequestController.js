@@ -11,7 +11,10 @@ exports.createReturnRequest = async (req, res) => {
     }
 
     const existing = await prisma.returnrequest.findFirst({
-      where: { orderId: Number(orderId), email },
+      where: {
+        orderId: Number(orderId),
+        email,
+      },
     });
 
     if (existing) {
@@ -67,13 +70,37 @@ exports.createReturnRequest = async (req, res) => {
 exports.getReturnRequests = async (req, res) => {
   try {
     const requests = await prisma.returnrequest.findMany({
-      orderBy: { createdAt: "desc" },
+      orderBy: {
+        createdAt: "desc",
+      },
     });
 
     res.json(requests);
   } catch (err) {
     res.status(500).json({
       message: "Failed to load return requests",
+      error: err.message,
+    });
+  }
+};
+
+exports.getUserReturnRequests = async (req, res) => {
+  try {
+    const { email } = req.params;
+
+    const requests = await prisma.returnrequest.findMany({
+      where: {
+        email,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    res.json(requests);
+  } catch (err) {
+    res.status(500).json({
+      message: "Failed to load user return requests",
       error: err.message,
     });
   }
@@ -88,8 +115,12 @@ exports.updateReturnRequestStatus = async (req, res) => {
     }
 
     const request = await prisma.returnrequest.update({
-      where: { id: Number(req.params.id) },
-      data: { status },
+      where: {
+        id: Number(req.params.id),
+      },
+      data: {
+        status,
+      },
     });
 
     await createNotification({
@@ -125,10 +156,14 @@ exports.updateReturnRequestStatus = async (req, res) => {
 exports.deleteReturnRequest = async (req, res) => {
   try {
     await prisma.returnrequest.delete({
-      where: { id: Number(req.params.id) },
+      where: {
+        id: Number(req.params.id),
+      },
     });
 
-    res.json({ message: "Return request deleted" });
+    res.json({
+      message: "Return request deleted",
+    });
   } catch (err) {
     res.status(500).json({
       message: "Failed to delete return request",
