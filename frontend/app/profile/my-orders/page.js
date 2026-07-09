@@ -16,21 +16,18 @@ const filters = [
   "Cancelled",
 ];
 
-const getStatusColor = (status) => {
-  switch (status) {
-    case "Pending":
-      return "bg-yellow-500";
-    case "Processing":
-      return "bg-blue-500";
-    case "Shipped":
-      return "bg-purple-500";
-    case "Delivered":
-      return "bg-green-500";
-    case "Cancelled":
-      return "bg-red-600";
-    default:
-      return "bg-gray-500";
-  }
+const orderStatusColor = {
+  Pending: "bg-yellow-500",
+  Processing: "bg-blue-500",
+  Shipped: "bg-purple-500",
+  Delivered: "bg-green-500",
+  Cancelled: "bg-red-600",
+};
+
+const returnStatusColor = {
+  Pending: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
+  Approved: "bg-green-500/20 text-green-400 border-green-500/30",
+  Rejected: "bg-red-500/20 text-red-400 border-red-500/30",
 };
 
 export default function MyOrdersPage() {
@@ -38,6 +35,7 @@ export default function MyOrdersPage() {
 
   const [user, setUser] = useState(null);
   const [orders, setOrders] = useState([]);
+  const [returns, setReturns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("All");
 
@@ -56,19 +54,28 @@ export default function MyOrdersPage() {
 
     const userData = JSON.parse(storedUser);
     setUser(userData);
-    fetchOrders(userData.email);
+    fetchData(userData.email);
   }, [router]);
 
-  const fetchOrders = async (email) => {
+  const fetchData = async (email) => {
     try {
-      const res = await api.get(`/orders/user/${email}`);
-      setOrders(res.data || []);
+      const [ordersRes, returnsRes] = await Promise.all([
+        api.get(`/orders/user/${email}`),
+        api.get(`/return-requests/user/${email}`),
+      ]);
+
+      setOrders(ordersRes.data || []);
+      setReturns(returnsRes.data || []);
     } catch (error) {
       console.log(error);
       showErrorToast("Failed to load orders");
     } finally {
       setLoading(false);
     }
+  };
+
+  const getReturnByOrderId = (orderId) => {
+    return returns.find((item) => Number(item.orderId) === Number(orderId));
   };
 
   const cancelOrder = async (e, orderId) => {
@@ -108,7 +115,7 @@ export default function MyOrdersPage() {
     try {
       setReturnLoading(true);
 
-      await api.post("/return-requests", {
+      const res = await api.post("/return-requests", {
         orderId: returnOrder.id,
         customer: user.username || returnOrder.customer,
         email: user.email || returnOrder.email,
@@ -116,7 +123,9 @@ export default function MyOrdersPage() {
         message,
       });
 
+      setReturns((prev) => [res.data.request, ...prev]);
       showSuccessToast("Return request submitted");
+
       setReturnOrder(null);
       setMessage("");
     } catch (error) {
@@ -127,9 +136,6 @@ export default function MyOrdersPage() {
       setReturnLoading(false);
     }
   };
-
-  const getTotalQuantity = (items) =>
-    items?.reduce((sum, item) => sum + (item.quantity || 1), 0) || 0;
 
   const filteredOrders = useMemo(() => {
     if (filter === "All") return orders;
@@ -186,17 +192,17 @@ export default function MyOrdersPage() {
       </div>
 
       <div className="flex gap-2 mb-8 overflow-x-auto pb-2">
-        {filters.map((f) => (
+        {filters.map((item) => (
           <button
-            key={f}
-            onClick={() => setFilter(f)}
+            key={item}
+            onClick={() => setFilter(item)}
             className={`px-4 py-2 rounded-full text-sm transition cursor-pointer whitespace-nowrap ${
-              filter === f
+              filter === item
                 ? "bg-[#D4AF37] text-black font-semibold"
                 : "bg-[#0d1117] border border-slate-700 text-gray-300 hover:border-[#D4AF37]/50"
             }`}
           >
-            {f}
+            {item}
           </button>
         ))}
       </div>
@@ -209,7 +215,7 @@ export default function MyOrdersPage() {
             <OrderCard
               key={order.id}
               order={order}
-              totalQty={getTotalQuantity(order.items)}
+              returnRequest={getReturnByOrderId(order.id)}
               onCancel={cancelOrder}
               onReturn={openReturnModal}
             />
@@ -264,7 +270,10 @@ function EmptyOrders({ filter }) {
   );
 }
 
-function OrderCard({ order, totalQty, onCancel, onReturn }) {
+function OrderCard({ order, returnRequest, onCancel, onReturn }) {
+  const totalQty =
+    order.items?.reduce((sum, item) => sum + Number(item.quantity || 1), 0) || 0;
+
   return (
     <Link
       href={`/profile/my-orders/${order.id}`}
@@ -281,13 +290,25 @@ function OrderCard({ order, totalQty, onCancel, onReturn }) {
           </p>
         </div>
 
-        <span
-          className={`${getStatusColor(
-            order.status
-          )} px-3 py-1 rounded-full text-white text-xs w-fit`}
-        >
-          {order.status}
-        </span>
+        <div className="flex flex-wrap gap-2">
+          {returnRequest && (
+            <span
+              className={`px-3 py-1 rounded-full text-xs font-bold border ${
+                returnStatusColor[returnRequest.status]
+              }`}
+            >
+              Return {returnRequest.status}
+            </span>
+          )}
+
+          <span
+            className={`${
+              orderStatusColor[order.status] || "bg-gray-500"
+            } px-3 py-1 rounded-full text-white text-xs w-fit`}
+          >
+            {order.status}
+          </span>
+        </div>
       </div>
 
       {order.items?.length > 0 && (
@@ -329,9 +350,7 @@ function OrderCard({ order, totalQty, onCancel, onReturn }) {
             {totalQty} item{totalQty !== 1 ? "s" : ""}
           </p>
 
-          <p className="text-[#D4AF37] font-bold mt-1">
-            Rs {order.total}
-          </p>
+          <p className="text-[#D4AF37] font-bold mt-1">Rs {order.total}</p>
         </div>
 
         <div className="flex flex-col sm:flex-row gap-3">
@@ -339,7 +358,7 @@ function OrderCard({ order, totalQty, onCancel, onReturn }) {
             View Details
           </span>
 
-          {order.status === "Delivered" && (
+          {order.status === "Delivered" && !returnRequest && (
             <button
               onClick={(e) => onReturn(e, order)}
               className="bg-[#D4AF37] text-black px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer"
