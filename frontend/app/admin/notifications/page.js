@@ -4,17 +4,27 @@ import { useEffect, useState } from "react";
 import api from "@/services/api";
 import { showSuccessToast, showErrorToast } from "@/utils/toast";
 
+const getNotificationIcon = (type) => {
+  switch (type) {
+    case "ORDER":
+      return "🛒";
+    case "LOW_STOCK":
+      return "⚠️";
+    case "OUT_OF_STOCK":
+      return "🚫";
+    default:
+      return "🔔";
+  }
+};
+
 export default function AdminNotificationsPage() {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchNotifications();
-  }, []);
-
   const fetchNotifications = async () => {
     try {
       setLoading(true);
+
       const res = await api.get("/notifications");
       setNotifications(res.data || []);
     } catch (error) {
@@ -24,11 +34,15 @@ export default function AdminNotificationsPage() {
     }
   };
 
+  useEffect(() => {
+    fetchNotifications();
+  }, []);
+
   const markAsRead = async (id) => {
     try {
       await api.patch(`/notifications/${id}/read`);
       fetchNotifications();
-    } catch {
+    } catch (error) {
       showErrorToast("Failed to update notification");
     }
   };
@@ -38,7 +52,7 @@ export default function AdminNotificationsPage() {
       await api.patch("/notifications/read-all");
       showSuccessToast("All notifications marked as read");
       fetchNotifications();
-    } catch {
+    } catch (error) {
       showErrorToast("Failed to update notifications");
     }
   };
@@ -48,7 +62,7 @@ export default function AdminNotificationsPage() {
       await api.delete(`/notifications/${id}`);
       showSuccessToast("Notification deleted");
       fetchNotifications();
-    } catch {
+    } catch (error) {
       showErrorToast("Failed to delete notification");
     }
   };
@@ -60,7 +74,7 @@ export default function AdminNotificationsPage() {
       await api.delete("/notifications");
       showSuccessToast("All notifications cleared");
       fetchNotifications();
-    } catch {
+    } catch (error) {
       showErrorToast("Failed to clear notifications");
     }
   };
@@ -72,22 +86,23 @@ export default function AdminNotificationsPage() {
           <p className="text-[#D4AF37] text-sm font-semibold uppercase tracking-widest">
             Admin Panel
           </p>
+
           <h1 className="text-4xl font-bold text-white mt-2">
             Notifications
           </h1>
         </div>
 
-        <div className="flex gap-3">
+        <div className="flex items-center gap-3">
           <button
             onClick={markAllAsRead}
-            className="bg-[#D4AF37] text-black px-5 py-3 rounded-xl font-bold"
+            className="bg-[#D4AF37] text-black px-4 py-2 rounded-lg text-sm font-semibold hover:bg-yellow-400 transition"
           >
             Mark All Read
           </button>
 
           <button
             onClick={clearAll}
-            className="bg-red-600 text-white px-5 py-3 rounded-xl font-bold"
+            className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-red-700 transition"
           >
             Clear All
           </button>
@@ -99,7 +114,9 @@ export default function AdminNotificationsPage() {
       ) : notifications.length === 0 ? (
         <div className="bg-slate-900 border border-slate-700 rounded-2xl p-12 text-center">
           <p className="text-5xl mb-4">🔔</p>
+
           <h2 className="text-white text-xl font-bold">No Notifications</h2>
+
           <p className="text-gray-400 mt-2">
             New alerts will appear here.
           </p>
@@ -109,7 +126,7 @@ export default function AdminNotificationsPage() {
           {notifications.map((item) => (
             <div
               key={item.id}
-              className={`border rounded-2xl p-5 ${
+              className={`border rounded-2xl p-5 transition ${
                 item.isRead
                   ? "bg-slate-900 border-slate-700"
                   : "bg-[#0B1F33] border-[#D4AF37]/50"
@@ -119,13 +136,7 @@ export default function AdminNotificationsPage() {
                 <div>
                   <div className="flex items-center gap-3 mb-2">
                     <span className="text-2xl">
-                      {item.type === "ORDER"
-                        ? "🛒"
-                        : item.type === "LOW_STOCK"
-                        ? "⚠️"
-                        : item.type === "OUT_OF_STOCK"
-                        ? "🚫"
-                        : "🔔"}
+                      {getNotificationIcon(item.type)}
                     </span>
 
                     <h2 className="text-white font-bold text-lg">
@@ -146,11 +157,11 @@ export default function AdminNotificationsPage() {
                   </p>
                 </div>
 
-                <div className="flex gap-2 shrink-0">
+                <div className="flex items-start gap-2 shrink-0">
                   {!item.isRead && (
                     <button
                       onClick={() => markAsRead(item.id)}
-                      className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm"
+                      className="bg-green-600 text-white px-3 py-1.5 rounded-md text-xs font-semibold hover:bg-green-700 transition"
                     >
                       Read
                     </button>
@@ -158,7 +169,7 @@ export default function AdminNotificationsPage() {
 
                   <button
                     onClick={() => deleteNotification(item.id)}
-                    className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm"
+                    className="bg-red-600 text-white px-3 py-1.5 rounded-md text-xs font-semibold hover:bg-red-700 transition"
                   >
                     Delete
                   </button>

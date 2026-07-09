@@ -182,15 +182,31 @@ exports.createOrder = async (req, res) => {
       });
 
       for (const item of items) {
-        await tx.product.update({
-          where: { id: Number(item.productId) },
-          data: {
-            stock: {
-              decrement: Number(item.quantity),
-            },
-          },
-        });
-      }
+  const updatedProduct = await tx.product.update({
+    where: {
+      id: Number(item.productId),
+    },
+    data: {
+      stock: {
+        decrement: Number(item.quantity),
+      },
+    },
+  });
+
+  if (updatedProduct.stock === 0) {
+    await createNotification({
+      title: "Out Of Stock",
+      message: `${updatedProduct.name} is now out of stock.`,
+      type: "OUT_OF_STOCK",
+    });
+  } else if (updatedProduct.stock <= 5) {
+    await createNotification({
+      title: "Low Stock Alert",
+      message: `${updatedProduct.name} has only ${updatedProduct.stock} item(s) remaining.`,
+      type: "LOW_STOCK",
+    });
+  }
+}
 
       if (finalCouponCode) {
         await tx.coupon.update({
