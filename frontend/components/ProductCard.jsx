@@ -11,6 +11,29 @@ import {
   showErrorToast,
 } from "@/utils/toast";
 
+const getStockStatus = (stock) => {
+  const currentStock = Number(stock || 0);
+
+  if (currentStock <= 0) {
+    return {
+      label: "Out of Stock",
+      className: "bg-red-500/20 text-red-400 border border-red-500/30",
+    };
+  }
+
+  if (currentStock <= 5) {
+    return {
+      label: `Only ${currentStock} left`,
+      className: "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30",
+    };
+  }
+
+  return {
+    label: "In Stock",
+    className: "bg-green-500/20 text-green-400 border border-green-500/30",
+  };
+};
+
 export default function ProductCard({ product }) {
   const { addToCart } = useContext(CartContext);
   const { isFavorite, toggleFavorite } = useContext(FavoritesContext);
@@ -19,6 +42,9 @@ export default function ProductCard({ product }) {
   const [totalReviews, setTotalReviews] = useState(0);
 
   const favorite = isFavorite(product.id);
+  const stock = Number(product.stock || 0);
+  const isOutOfStock = stock <= 0;
+  const stockStatus = getStockStatus(stock);
 
   useEffect(() => {
     fetchProductRating();
@@ -36,6 +62,11 @@ export default function ProductCard({ product }) {
   };
 
   const handleAddToCart = () => {
+    if (isOutOfStock) {
+      showErrorToast("This product is out of stock");
+      return;
+    }
+
     addToCart(product);
     showCartToast(product);
   };
@@ -54,12 +85,14 @@ export default function ProductCard({ product }) {
   };
 
   return (
-    <div className="group h-full flex flex-col bg-[#0B1F33] border border-[#D4AF37]/20 rounded-xl overflow-hidden cursor-pointer transition-all duration-300 hover:-translate-y-2 hover:scale-105 hover:border-[#D4AF37] hover:shadow-xl hover:shadow-[#D4AF37]/20">
+    <div className="group h-full flex flex-col bg-[#0B1F33] border border-[#D4AF37]/20 rounded-xl overflow-hidden transition-all duration-300 hover:-translate-y-2 hover:scale-105 hover:border-[#D4AF37] hover:shadow-xl hover:shadow-[#D4AF37]/20">
       <div className="relative w-full h-64 overflow-hidden shrink-0">
         <img
           src={product.image}
           alt={product.name}
-          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+          className={`w-full h-full object-cover transition-transform duration-500 group-hover:scale-110 ${
+            isOutOfStock ? "opacity-60 grayscale" : ""
+          }`}
         />
 
         <button
@@ -76,6 +109,12 @@ export default function ProductCard({ product }) {
             ⭐ Featured
           </span>
         )}
+
+        <span
+          className={`absolute bottom-3 right-3 px-3 py-1 rounded-full text-xs font-bold backdrop-blur-sm ${stockStatus.className}`}
+        >
+          {stockStatus.label}
+        </span>
 
         {product.category && (
           <span className="absolute bottom-3 left-3 bg-black/70 backdrop-blur-sm text-white px-3 py-1 rounded-full text-xs">
@@ -107,9 +146,23 @@ export default function ProductCard({ product }) {
           <p className="text-gray-400 text-sm">{product.description}</p>
         </div>
 
-        <p className="text-[#D4AF37] text-2xl font-bold mt-3">
-          Rs {product.price}
-        </p>
+        <div className="mt-3 flex items-center justify-between gap-3">
+          <p className="text-[#D4AF37] text-2xl font-bold">
+            Rs {Number(product.price || 0).toLocaleString("en-PK")}
+          </p>
+
+          <p
+            className={`text-xs font-semibold ${
+              isOutOfStock
+                ? "text-red-400"
+                : stock <= 5
+                ? "text-yellow-400"
+                : "text-green-400"
+            }`}
+          >
+            {stock} left
+          </p>
+        </div>
 
         <div className="mt-auto pt-5 flex gap-2">
           <Link
@@ -122,9 +175,14 @@ export default function ProductCard({ product }) {
           <button
             type="button"
             onClick={handleAddToCart}
-            className="flex-1 bg-[#D4AF37] text-black py-2 rounded-lg font-semibold transition hover:bg-yellow-400"
+            disabled={isOutOfStock}
+            className={`flex-1 py-2 rounded-lg font-semibold transition ${
+              isOutOfStock
+                ? "bg-slate-700 text-gray-400 cursor-not-allowed"
+                : "bg-[#D4AF37] text-black hover:bg-yellow-400"
+            }`}
           >
-            Add Cart
+            {isOutOfStock ? "Out Stock" : "Add Cart"}
           </button>
         </div>
       </div>

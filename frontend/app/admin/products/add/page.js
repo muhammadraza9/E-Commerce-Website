@@ -4,10 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import api from "@/services/api";
 import AddProductSkeleton from "@/components/skeletons/AddProductSkeleton";
-import {
-  showSuccessToast,
-  showErrorToast,
-} from "@/utils/toast";
+import { showSuccessToast, showErrorToast } from "@/utils/toast";
 
 export default function AddProductPage() {
   const router = useRouter();
@@ -19,6 +16,7 @@ export default function AddProductPage() {
     image: "",
     category: "Clothing",
     price: "",
+    stock: "",
     featured: false,
   });
 
@@ -67,20 +65,26 @@ export default function AddProductPage() {
     setImagePreview(url);
   };
 
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-
-    if (!file) return;
+  const validateImageFile = (file) => {
+    if (!file) return false;
 
     if (!file.type.startsWith("image/")) {
       showErrorToast("Please select an image.");
-      return;
+      return false;
     }
 
     if (file.size > 5 * 1024 * 1024) {
       showErrorToast("Image must be less than 5MB.");
-      return;
+      return false;
     }
+
+    return true;
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+
+    if (!validateImageFile(file)) return;
 
     setImageFile(file);
     setImagePreview(URL.createObjectURL(file));
@@ -91,31 +95,16 @@ export default function AddProductPage() {
 
     const file = e.dataTransfer.files[0];
 
-    if (!file) return;
-
-    if (!file.type.startsWith("image/")) {
-      showErrorToast("Invalid image.");
-      return;
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      showErrorToast("Image must be less than 5MB.");
-      return;
-    }
+    if (!validateImageFile(file)) return;
 
     setImageFile(file);
     setImagePreview(URL.createObjectURL(file));
-  };
-
-  const handleDragOver = (e) => {
-    e.preventDefault();
   };
 
   const uploadToCloudinary = async (file) => {
     const data = new FormData();
 
     data.append("file", file);
-
     data.append(
       "upload_preset",
       process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET
@@ -131,18 +120,34 @@ export default function AddProductPage() {
 
     const cloudData = await cloudRes.json();
 
+    if (!cloudData.secure_url) {
+      throw new Error("Image upload failed");
+    }
+
     return cloudData.secure_url;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (imageMode === "url" && !formData.image) {
-      return showErrorToast("Please enter image URL.");
+    if (imageMode === "url" && !formData.image.trim()) {
+      showErrorToast("Please enter image URL.");
+      return;
     }
 
     if (imageMode === "file" && !imageFile) {
-      return showErrorToast("Please upload image.");
+      showErrorToast("Please upload image.");
+      return;
+    }
+
+    if (Number(formData.price) < 0) {
+      showErrorToast("Price cannot be negative.");
+      return;
+    }
+
+    if (Number(formData.stock) < 0) {
+      showErrorToast("Stock cannot be negative.");
+      return;
     }
 
     try {
@@ -158,10 +163,10 @@ export default function AddProductPage() {
         ...formData,
         image,
         price: Number(formData.price),
+        stock: Number(formData.stock),
       });
 
       showSuccessToast("Product Added Successfully");
-
       router.push("/admin/products");
     } catch (error) {
       console.log(error);
@@ -178,32 +183,23 @@ export default function AddProductPage() {
   return (
     <div className="max-w-3xl mx-auto px-6 py-12">
       <h1 className="text-4xl font-bold text-white mb-8">
-        Add New Product
+        Add New <span className="text-[#D4AF37]">Product</span>
       </h1>
 
       <form
         onSubmit={handleSubmit}
         className="bg-slate-900 border border-slate-700 rounded-2xl p-6 space-y-5"
       >
-        <div>
-          <label className="block text-white mb-2">
-            Product Name
-          </label>
-
-          <input
-            type="text"
-            name="name"
-            value={formData.name}
-            onChange={handleChange}
-            className="w-full bg-slate-800 border border-slate-600 text-white p-3 rounded-lg outline-none focus:border-[#D4AF37]"
-            required
-          />
-        </div>
+        <Input
+          label="Product Name"
+          name="name"
+          value={formData.name}
+          onChange={handleChange}
+          required
+        />
 
         <div>
-          <label className="block text-white mb-2">
-            Description
-          </label>
+          <label className="block text-white mb-2">Description</label>
 
           <textarea
             rows={4}
@@ -216,9 +212,7 @@ export default function AddProductPage() {
         </div>
 
         <div>
-          <label className="block text-white mb-2">
-            Product Image
-          </label>
+          <label className="block text-white mb-2">Product Image</label>
 
           <div className="flex gap-2 mb-4">
             <button
@@ -257,7 +251,7 @@ export default function AddProductPage() {
           ) : (
             <div
               onDrop={handleDrop}
-              onDragOver={handleDragOver}
+              onDragOver={(e) => e.preventDefault()}
               onClick={() => fileInputRef.current.click()}
               className="border-2 border-dashed border-slate-600 rounded-xl p-8 text-center cursor-pointer hover:border-[#D4AF37] transition"
             >
@@ -287,9 +281,7 @@ export default function AddProductPage() {
         </div>
 
         <div>
-          <label className="block text-white mb-2">
-            Category
-          </label>
+          <label className="block text-white mb-2">Category</label>
 
           <select
             name="category"
@@ -305,17 +297,24 @@ export default function AddProductPage() {
           </select>
         </div>
 
-        <div>
-          <label className="block text-white mb-2">
-            Price
-          </label>
-
-          <input
+        <div className="grid md:grid-cols-2 gap-5">
+          <Input
+            label="Price"
             type="number"
             name="price"
             value={formData.price}
             onChange={handleChange}
-            className="w-full bg-slate-800 border border-slate-600 text-white p-3 rounded-lg outline-none focus:border-[#D4AF37]"
+            min="0"
+            required
+          />
+
+          <Input
+            label="Stock Quantity"
+            type="number"
+            name="stock"
+            value={formData.stock}
+            onChange={handleChange}
+            min="0"
             required
           />
         </div>
@@ -330,10 +329,7 @@ export default function AddProductPage() {
             className="w-5 h-5 accent-yellow-500"
           />
 
-          <label
-            htmlFor="featured"
-            className="text-white cursor-pointer"
-          >
+          <label htmlFor="featured" className="text-white cursor-pointer">
             ⭐ Mark this product as Featured
           </label>
         </div>
@@ -345,6 +341,32 @@ export default function AddProductPage() {
           {loading ? "Adding..." : "Add Product"}
         </button>
       </form>
+    </div>
+  );
+}
+
+function Input({
+  label,
+  name,
+  value,
+  onChange,
+  type = "text",
+  min,
+  required = false,
+}) {
+  return (
+    <div>
+      <label className="block text-white mb-2">{label}</label>
+
+      <input
+        type={type}
+        name={name}
+        value={value}
+        onChange={onChange}
+        min={min}
+        className="w-full bg-slate-800 border border-slate-600 text-white p-3 rounded-lg outline-none focus:border-[#D4AF37]"
+        required={required}
+      />
     </div>
   );
 }

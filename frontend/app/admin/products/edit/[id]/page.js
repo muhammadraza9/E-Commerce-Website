@@ -4,10 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import api from "@/services/api";
 import EditProductSkeleton from "@/components/skeletons/EditProductSkeleton";
-import {
-  showSuccessToast,
-  showErrorToast,
-} from "@/utils/toast";
+import { showSuccessToast, showErrorToast } from "@/utils/toast";
 
 export default function EditProductPage() {
   const router = useRouter();
@@ -23,6 +20,7 @@ export default function EditProductPage() {
     image: "",
     category: "Clothing",
     price: "",
+    stock: "",
     featured: false,
   });
 
@@ -46,6 +44,7 @@ export default function EditProductPage() {
         image: res.data.image || "",
         category: res.data.category || "Clothing",
         price: res.data.price || "",
+        stock: res.data.stock ?? 0,
         featured: res.data.featured || false,
       });
 
@@ -70,12 +69,7 @@ export default function EditProductPage() {
   const handleImageModeSwitch = (mode) => {
     setImageMode(mode);
     setImageFile(null);
-
-    if (mode === "file") {
-      setImagePreview("");
-    } else {
-      setImagePreview(formData.image);
-    }
+    setImagePreview(mode === "file" ? "" : formData.image);
   };
 
   const handleUrlChange = (e) => {
@@ -89,18 +83,26 @@ export default function EditProductPage() {
     setImagePreview(url);
   };
 
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-
-    if (!file) return;
+  const validateImageFile = (file) => {
+    if (!file) return false;
 
     if (!file.type.startsWith("image/")) {
-      return showErrorToast("Please select an image");
+      showErrorToast("Please select an image");
+      return false;
     }
 
     if (file.size > 5 * 1024 * 1024) {
-      return showErrorToast("Image must be less than 5MB");
+      showErrorToast("Image must be less than 5MB");
+      return false;
     }
+
+    return true;
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+
+    if (!validateImageFile(file)) return;
 
     setImageFile(file);
     setImagePreview(URL.createObjectURL(file));
@@ -111,29 +113,16 @@ export default function EditProductPage() {
 
     const file = e.dataTransfer.files[0];
 
-    if (!file) return;
-
-    if (!file.type.startsWith("image/")) {
-      return showErrorToast("Please select an image");
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      return showErrorToast("Image must be less than 5MB");
-    }
+    if (!validateImageFile(file)) return;
 
     setImageFile(file);
     setImagePreview(URL.createObjectURL(file));
-  };
-
-  const handleDragOver = (e) => {
-    e.preventDefault();
   };
 
   const uploadToCloudinary = async (file) => {
     const data = new FormData();
 
     data.append("file", file);
-
     data.append(
       "upload_preset",
       process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET
@@ -149,11 +138,25 @@ export default function EditProductPage() {
 
     const cloud = await res.json();
 
+    if (!cloud.secure_url) {
+      throw new Error("Image upload failed");
+    }
+
     return cloud.secure_url;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (Number(formData.price) < 0) {
+      showErrorToast("Price cannot be negative");
+      return;
+    }
+
+    if (Number(formData.stock) < 0) {
+      showErrorToast("Stock cannot be negative");
+      return;
+    }
 
     try {
       setLoading(true);
@@ -168,10 +171,10 @@ export default function EditProductPage() {
         ...formData,
         image,
         price: Number(formData.price),
+        stock: Number(formData.stock),
       });
 
       showSuccessToast("Product Updated Successfully");
-
       router.push("/admin/products");
     } catch (error) {
       console.log(error);
@@ -188,32 +191,23 @@ export default function EditProductPage() {
   return (
     <div className="max-w-3xl mx-auto px-6 py-12">
       <h1 className="text-4xl font-bold text-white mb-8">
-        Edit Product
+        Edit <span className="text-[#D4AF37]">Product</span>
       </h1>
 
       <form
         onSubmit={handleSubmit}
         className="bg-slate-900 border border-slate-700 rounded-2xl p-6 space-y-5"
       >
-        <div>
-          <label className="block text-white mb-2">
-            Product Name
-          </label>
-
-          <input
-            type="text"
-            name="name"
-            value={formData.name}
-            onChange={handleChange}
-            className="w-full bg-slate-800 border border-slate-600 text-white p-3 rounded-lg outline-none focus:border-[#D4AF37]"
-            required
-          />
-        </div>
+        <Input
+          label="Product Name"
+          name="name"
+          value={formData.name}
+          onChange={handleChange}
+          required
+        />
 
         <div>
-          <label className="block text-white mb-2">
-            Description
-          </label>
+          <label className="block text-white mb-2">Description</label>
 
           <textarea
             rows="4"
@@ -226,9 +220,7 @@ export default function EditProductPage() {
         </div>
 
         <div>
-          <label className="block text-white mb-2">
-            Product Image
-          </label>
+          <label className="block text-white mb-2">Product Image</label>
 
           <div className="flex gap-2 mb-4">
             <button
@@ -268,12 +260,11 @@ export default function EditProductPage() {
             <>
               <div
                 onDrop={handleDrop}
-                onDragOver={handleDragOver}
+                onDragOver={(e) => e.preventDefault()}
                 onClick={() => fileInputRef.current.click()}
                 className="border-2 border-dashed border-slate-600 rounded-xl p-8 text-center cursor-pointer hover:border-[#D4AF37] transition"
               >
                 <p className="text-white font-semibold">Upload Image</p>
-
                 <p className="text-gray-400 text-sm mt-2">
                   Drag & drop image here or click to browse
                 </p>
@@ -299,9 +290,7 @@ export default function EditProductPage() {
         )}
 
         <div>
-          <label className="block text-white mb-2">
-            Category
-          </label>
+          <label className="block text-white mb-2">Category</label>
 
           <select
             name="category"
@@ -317,17 +306,24 @@ export default function EditProductPage() {
           </select>
         </div>
 
-        <div>
-          <label className="block text-white mb-2">
-            Price
-          </label>
-
-          <input
+        <div className="grid md:grid-cols-2 gap-5">
+          <Input
+            label="Price"
             type="number"
             name="price"
             value={formData.price}
             onChange={handleChange}
-            className="w-full bg-slate-800 border border-slate-600 text-white p-3 rounded-lg outline-none focus:border-[#D4AF37]"
+            min="0"
+            required
+          />
+
+          <Input
+            label="Stock Quantity"
+            type="number"
+            name="stock"
+            value={formData.stock}
+            onChange={handleChange}
+            min="0"
             required
           />
         </div>
@@ -342,10 +338,7 @@ export default function EditProductPage() {
             className="w-5 h-5 accent-yellow-500"
           />
 
-          <label
-            htmlFor="featured"
-            className="text-white cursor-pointer"
-          >
+          <label htmlFor="featured" className="text-white cursor-pointer">
             ⭐ Featured Product
           </label>
         </div>
@@ -357,6 +350,32 @@ export default function EditProductPage() {
           {loading ? "Updating..." : "Update Product"}
         </button>
       </form>
+    </div>
+  );
+}
+
+function Input({
+  label,
+  name,
+  value,
+  onChange,
+  type = "text",
+  min,
+  required = false,
+}) {
+  return (
+    <div>
+      <label className="block text-white mb-2">{label}</label>
+
+      <input
+        type={type}
+        name={name}
+        value={value}
+        onChange={onChange}
+        min={min}
+        className="w-full bg-slate-800 border border-slate-600 text-white p-3 rounded-lg outline-none focus:border-[#D4AF37]"
+        required={required}
+      />
     </div>
   );
 }

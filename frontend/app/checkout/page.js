@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useContext, useEffect } from "react";
+import { useContext, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import api from "@/services/api";
 import { CartContext } from "@/context/CartContext";
@@ -15,17 +15,17 @@ const DEFAULT_SETTINGS = {
   freeShippingEnabled: true,
 };
 
+const money = (value) => `Rs ${Number(value || 0).toLocaleString("en-PK")}`;
+const stock = (item) => Number(item.stock || 0);
+
 export default function CheckoutPage() {
   const router = useRouter();
+  const { cart, checkoutItems, removeCheckedOutItems } = useContext(CartContext);
 
-  const { cart, checkoutItems, removeCheckedOutItems } =
-    useContext(CartContext);
-
-  const itemsToCheckout = checkoutItems.length > 0 ? checkoutItems : cart;
+  const items = checkoutItems.length ? checkoutItems : cart;
 
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(false);
-  const [orderPlaced, setOrderPlaced] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
 
   const [couponCode, setCouponCode] = useState("");
@@ -42,48 +42,43 @@ export default function CheckoutPage() {
   });
 
   useEffect(() => {
-    const initCheckout = async () => {
-      try {
-        const storedUser = localStorage.getItem("user");
-        const token = localStorage.getItem("token");
-
-        if (!storedUser || !token) {
-          showErrorToast("Please sign in to place an order");
-          router.push("/signin");
-          return;
-        }
-
-        const userData = JSON.parse(storedUser);
-
-        setFormData((prev) => ({
-          ...prev,
-          name: userData.username || userData.name || prev.name,
-          email: userData.email || prev.email,
-        }));
-
-        const res = await api.get("/admin-settings");
-
-        setSettings({
-          ...DEFAULT_SETTINGS,
-          ...res.data,
-        });
-      } catch (error) {
-        console.log(error);
-        setSettings(DEFAULT_SETTINGS);
-      } finally {
-        setCheckingAuth(false);
-      }
-    };
-
     initCheckout();
-  }, [router]);
+  }, []);
 
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+  const initCheckout = async () => {
+    try {
+      const user = JSON.parse(localStorage.getItem("user"));
+      const token = localStorage.getItem("token");
+
+      if (!user || !token) {
+        showErrorToast("Please sign in to place an order");
+        router.push("/signin");
+        return;
+      }
+
+      setFormData((prev) => ({
+        ...prev,
+        name: user.username || user.name || "",
+        email: user.email || "",
+      }));
+
+      const res = await api.get("/admin-settings");
+      setSettings({ ...DEFAULT_SETTINGS, ...res.data });
+    } catch {
+      setSettings(DEFAULT_SETTINGS);
+    } finally {
+      setCheckingAuth(false);
+    }
   };
 
-  const subtotal = itemsToCheckout.reduce(
-    (sum, item) => sum + item.price * item.quantity,
+  const invalidItems = useMemo(() => {
+    return items.filter(
+      (item) => stock(item) <= 0 || Number(item.quantity || 1) > stock(item)
+    );
+  }, [items]);
+
+  const subtotal = items.reduce(
+    (sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 1),
     0
   );
 
@@ -102,38 +97,40 @@ export default function CheckoutPage() {
   const grandTotal = taxableAmount + finalShipping + taxAmount;
 
   const paymentMethods = [
-    ...(settings.codEnabled
-      ? [{ id: "COD", label: "Cash On Delivery" }]
-      : []),
+    ...(settings.codEnabled ? [{ id: "COD", label: "Cash On Delivery" }] : []),
     { id: "JAZZCASH", label: "JazzCash" },
     { id: "EASYPAISA", label: "EasyPaisa" },
   ];
 
+  const isFormComplete =
+    formData.name.trim() &&
+    formData.email.trim() &&
+    formData.phone.trim() &&
+    formData.address.trim() &&
+    formData.paymentMethod;
+
+  const handleChange = (e) => {
+    setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  };
+
   const applyCoupon = async () => {
-    if (!couponCode.trim()) {
-      showErrorToast("Please enter coupon code");
-      return;
-    }
+    if (!couponCode.trim()) return showErrorToast("Please enter coupon code");
 
     try {
       setCouponLoading(true);
 
       const res = await api.post("/coupons/apply", {
-        code: couponCode,
+        code: couponCode.trim().toUpperCase(),
         subtotal,
       });
 
       setAppliedCoupon(res.data.coupon);
       setDiscountAmount(Number(res.data.discountAmount || 0));
-
       showSuccessToast("Coupon applied successfully");
     } catch (error) {
       setAppliedCoupon(null);
       setDiscountAmount(0);
-
-      showErrorToast(
-        error?.response?.data?.message || "Invalid coupon code"
-      );
+      showErrorToast(error?.response?.data?.message || "Invalid coupon code");
     } finally {
       setCouponLoading(false);
     }
@@ -149,24 +146,15 @@ export default function CheckoutPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    const storedUser = localStorage.getItem("user");
-    const token = localStorage.getItem("token");
-
-    if (!storedUser || !token) {
+    if (!localStorage.getItem("token")) {
       showErrorToast("Please sign in to place an order");
       router.push("/signin");
       return;
     }
 
-    if (itemsToCheckout.length === 0) {
-      showErrorToast("Your cart is empty");
-      return;
-    }
-
-    if (!formData.paymentMethod) {
-      showErrorToast("Please select a payment method");
-      return;
-    }
+    if (!items.length) return showErrorToast("Your cart is empty");
+    if (invalidItems.length) return showErrorToast("Please fix stock issues first");
+    if (!formData.paymentMethod) return showErrorToast("Please select payment method");
 
     try {
       setLoading(true);
@@ -177,7 +165,6 @@ export default function CheckoutPage() {
         phone: formData.phone,
         address: formData.address,
         paymentMethod: formData.paymentMethod,
-
         subtotal,
         discountAmount,
         couponCode: appliedCoupon?.code || null,
@@ -186,50 +173,29 @@ export default function CheckoutPage() {
         taxPercentage,
         grandTotal,
         total: grandTotal,
-
-        items: itemsToCheckout.map((item) => ({
+        items: items.map((item) => ({
           productId: item.id,
-          quantity: item.quantity,
-          price: item.price,
+          quantity: Number(item.quantity || 1),
+          price: Number(item.price || 0),
         })),
       };
 
       const res = await api.post("/orders", orderData);
 
       localStorage.setItem("trackingId", res.data.trackingId);
+      removeCheckedOutItems(items.map((item) => item.id));
 
-      setOrderPlaced(true);
       showSuccessToast("Order placed successfully");
 
-      removeCheckedOutItems(itemsToCheckout.map((item) => item.id));
-
-      setTimeout(() => {
-        router.push("/order-success");
-      }, 1200);
+      setTimeout(() => router.push("/order-success"), 1000);
     } catch (error) {
-      console.log(error);
-
-      if (error?.response?.status === 401) {
-        showErrorToast("Please sign in to place an order");
-        router.push("/signin");
-      } else {
-        showErrorToast("Order failed");
-      }
+      showErrorToast(error?.response?.data?.message || "Order failed");
     } finally {
       setLoading(false);
     }
   };
 
-  const isFormComplete =
-    formData.name.trim() !== "" &&
-    formData.email.trim() !== "" &&
-    formData.phone.trim() !== "" &&
-    formData.address.trim() !== "" &&
-    formData.paymentMethod !== "";
-
-  if (checkingAuth) {
-    return <CheckoutSkeleton />;
-  }
+  if (checkingAuth) return <CheckoutSkeleton />;
 
   return (
     <div className="min-h-screen relative">
@@ -241,7 +207,6 @@ export default function CheckoutPage() {
           backgroundSize: "cover",
           backgroundPosition: "center",
           backgroundRepeat: "no-repeat",
-          filter: "brightness(1)",
         }}
       />
 
@@ -250,126 +215,28 @@ export default function CheckoutPage() {
         style={{ background: "rgba(10, 22, 40, 0.85)" }}
       />
 
-      <div className="relative z-10 max-w-3xl mx-auto px-6 py-12 min-h-screen">
+      <main className="relative z-10 max-w-3xl mx-auto px-6 py-12 min-h-screen">
         <h1 className="text-4xl font-bold mb-8 text-white">
           Check<span className="text-[#D4AF37]">out</span>
         </h1>
 
-        {!orderPlaced && (
-          <div
-            className="rounded-2xl p-6 mb-6 border"
-            style={{
-              backgroundColor: "rgba(13, 31, 56, 0.85)",
-              borderColor: "rgba(212,175,55,0.25)",
-            }}
-          >
-            <h2 className="text-lg font-semibold mb-4 text-white">
-              {itemsToCheckout.length} item
-              {itemsToCheckout.length !== 1 ? "s" : ""} in this order
-            </h2>
-
-            <div className="space-y-3">
-              {itemsToCheckout.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex justify-between items-center text-sm"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-lg overflow-hidden border border-[#D4AF37]/30 shrink-0">
-                      <img
-                        src={item.image || "/placeholder.png"}
-                        alt={item.name}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-
-                    <span className="text-gray-300">
-                      {item.name} × {item.quantity}
-                    </span>
-                  </div>
-
-                  <span className="text-[#D4AF37] font-semibold">
-                    Rs {item.price * item.quantity}
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-5 pt-4 border-t border-[#D4AF37]/20">
-              <div className="flex flex-col sm:flex-row gap-3">
-                <input
-                  type="text"
-                  value={couponCode}
-                  onChange={(e) =>
-                    setCouponCode(e.target.value.toUpperCase())
-                  }
-                  disabled={Boolean(appliedCoupon)}
-                  placeholder="Enter coupon code"
-                  className="flex-1 border text-white placeholder-gray-400 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37] disabled:opacity-60"
-                  style={{
-                    backgroundColor: "rgba(10,22,40,0.8)",
-                    borderColor: "rgba(212,175,55,0.2)",
-                  }}
-                />
-
-                {appliedCoupon ? (
-                  <button
-                    type="button"
-                    onClick={removeCoupon}
-                    className="bg-red-600 text-white px-5 py-3 rounded-lg font-semibold hover:bg-red-700 transition"
-                  >
-                    Remove
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={applyCoupon}
-                    disabled={couponLoading}
-                    className="bg-[#D4AF37] text-black px-5 py-3 rounded-lg font-semibold hover:bg-yellow-400 transition disabled:opacity-60"
-                  >
-                    {couponLoading ? "Applying..." : "Apply"}
-                  </button>
-                )}
-              </div>
-
-              {appliedCoupon && (
-                <p className="text-green-400 text-sm mt-3">
-                  Coupon {appliedCoupon.code} applied successfully.
-                </p>
-              )}
-            </div>
-
-            <div className="mt-5 pt-4 space-y-3 border-t border-[#D4AF37]/20">
-              <SummaryRow label="Subtotal" value={`Rs ${subtotal}`} />
-
-              {discountAmount > 0 && (
-                <SummaryRow
-                  label={`Discount (${appliedCoupon?.code})`}
-                  value={`- Rs ${discountAmount}`}
-                  danger
-                />
-              )}
-
-              <SummaryRow
-                label="Shipping"
-                value={isFreeShipping ? "Free" : `Rs ${finalShipping}`}
-                highlight={isFreeShipping}
-              />
-
-              <SummaryRow
-                label={`Tax (${taxPercentage}%)`}
-                value={`Rs ${taxAmount}`}
-              />
-
-              <div className="pt-3 flex justify-between items-center border-t border-slate-700">
-                <span className="text-white font-bold">Grand Total</span>
-                <span className="text-[#D4AF37] font-bold text-xl">
-                  Rs {grandTotal}
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
+        <OrderSummary
+          items={items}
+          invalidItems={invalidItems}
+          couponCode={couponCode}
+          setCouponCode={setCouponCode}
+          appliedCoupon={appliedCoupon}
+          couponLoading={couponLoading}
+          applyCoupon={applyCoupon}
+          removeCoupon={removeCoupon}
+          subtotal={subtotal}
+          discountAmount={discountAmount}
+          finalShipping={finalShipping}
+          isFreeShipping={isFreeShipping}
+          taxPercentage={taxPercentage}
+          taxAmount={taxAmount}
+          grandTotal={grandTotal}
+        />
 
         <form
           onSubmit={handleSubmit}
@@ -379,40 +246,22 @@ export default function CheckoutPage() {
             borderColor: "rgba(212,175,55,0.25)",
           }}
         >
-          <Input
-            name="name"
-            placeholder="Full Name"
-            value={formData.name}
-            onChange={handleChange}
-          />
-
-          <Input
-            name="email"
-            type="email"
-            placeholder="Email"
-            value={formData.email}
-            onChange={handleChange}
-          />
-
-          <Input
-            name="phone"
-            placeholder="Phone Number"
-            value={formData.phone}
-            onChange={handleChange}
-          />
+          <Input name="name" placeholder="Full Name" value={formData.name} onChange={handleChange} />
+          <Input name="email" type="email" placeholder="Email" value={formData.email} onChange={handleChange} />
+          <Input name="phone" placeholder="Phone Number" value={formData.phone} onChange={handleChange} />
 
           <textarea
             name="address"
             placeholder="Shipping Address"
             rows="4"
             value={formData.address}
-            className="w-full border text-white placeholder-gray-400 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37] resize-none"
+            onChange={handleChange}
+            required
+            className="w-full border text-white placeholder-gray-400 p-3 rounded-lg outline-none focus:ring-2 focus:ring-[#D4AF37] resize-none"
             style={{
               backgroundColor: "rgba(10,22,40,0.8)",
               borderColor: "rgba(212,175,55,0.2)",
             }}
-            onChange={handleChange}
-            required
           />
 
           <div>
@@ -424,7 +273,7 @@ export default function CheckoutPage() {
               {paymentMethods.map((method) => (
                 <label
                   key={method.id}
-                  className="flex items-center gap-2 border rounded-xl p-4 cursor-pointer transition-colors"
+                  className="flex items-center gap-2 border rounded-xl p-4 cursor-pointer"
                   style={{
                     backgroundColor:
                       formData.paymentMethod === method.id
@@ -456,12 +305,160 @@ export default function CheckoutPage() {
 
           <button
             type="submit"
-            disabled={loading || !isFormComplete}
-            className="w-full py-3 rounded-xl font-semibold transition-all duration-300 cursor-pointer bg-[#D4AF37] text-[#0a1628] disabled:opacity-40 disabled:cursor-not-allowed disabled:scale-100 enabled:hover:scale-[1.02]"
+            disabled={loading || !isFormComplete || invalidItems.length > 0}
+            className="w-full py-3 rounded-xl font-semibold bg-[#D4AF37] text-[#0a1628] disabled:opacity-40 disabled:cursor-not-allowed enabled:hover:scale-[1.02] transition"
           >
-            {loading ? "Placing Order..." : `Place Order - Rs ${grandTotal}`}
+            {loading ? "Placing Order..." : `Place Order - ${money(grandTotal)}`}
           </button>
         </form>
+      </main>
+    </div>
+  );
+}
+
+function OrderSummary({
+  items,
+  invalidItems,
+  couponCode,
+  setCouponCode,
+  appliedCoupon,
+  couponLoading,
+  applyCoupon,
+  removeCoupon,
+  subtotal,
+  discountAmount,
+  finalShipping,
+  isFreeShipping,
+  taxPercentage,
+  taxAmount,
+  grandTotal,
+}) {
+  return (
+    <div
+      className="rounded-2xl p-6 mb-6 border"
+      style={{
+        backgroundColor: "rgba(13, 31, 56, 0.85)",
+        borderColor: "rgba(212,175,55,0.25)",
+      }}
+    >
+      <h2 className="text-lg font-semibold mb-4 text-white">
+        {items.length} item{items.length !== 1 ? "s" : ""} in this order
+      </h2>
+
+      <div className="space-y-3">
+        {items.map((item) => {
+          const itemStock = stock(item);
+          const qty = Number(item.quantity || 1);
+          const remaining = Math.max(itemStock - qty, 0);
+          const invalid = itemStock <= 0 || qty > itemStock;
+
+          return (
+            <div key={item.id} className="flex justify-between gap-3 text-sm">
+              <div className="flex gap-3">
+                <img
+                  src={item.image || "/placeholder.png"}
+                  alt={item.name}
+                  className={`w-12 h-12 rounded-lg object-cover border border-[#D4AF37]/30 ${
+                    invalid ? "opacity-60 grayscale" : ""
+                  }`}
+                />
+
+                <div>
+                  <p className="text-gray-300">
+                    {item.name} × {qty}
+                  </p>
+
+                  <p
+                    className={`text-xs ${
+                      invalid ? "text-red-400" : "text-green-400"
+                    }`}
+                  >
+                    {itemStock <= 0
+                      ? "Out of stock"
+                      : qty > itemStock
+                      ? `Only ${itemStock} available`
+                      : `${remaining} left after this order`}
+                  </p>
+                </div>
+              </div>
+
+              <span className="text-[#D4AF37] font-semibold">
+                {money(Number(item.price || 0) * qty)}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      {invalidItems.length > 0 && (
+        <p className="text-red-400 text-sm mt-4">
+          Some items are out of stock or quantity exceeds available stock.
+        </p>
+      )}
+
+      <div className="mt-5 pt-4 border-t border-[#D4AF37]/20">
+        <div className="flex flex-col sm:flex-row gap-3">
+          <input
+            type="text"
+            value={couponCode}
+            onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+            disabled={Boolean(appliedCoupon)}
+            placeholder="Enter coupon code"
+            className="flex-1 border text-white placeholder-gray-400 p-3 rounded-lg outline-none focus:ring-2 focus:ring-[#D4AF37] disabled:opacity-60"
+            style={{
+              backgroundColor: "rgba(10,22,40,0.8)",
+              borderColor: "rgba(212,175,55,0.2)",
+            }}
+          />
+
+          <button
+            type="button"
+            onClick={appliedCoupon ? removeCoupon : applyCoupon}
+            disabled={couponLoading}
+            className={`px-5 py-3 rounded-lg font-semibold transition disabled:opacity-60 ${
+              appliedCoupon
+                ? "bg-red-600 text-white hover:bg-red-700"
+                : "bg-[#D4AF37] text-black hover:bg-yellow-400"
+            }`}
+          >
+            {appliedCoupon
+              ? "Remove"
+              : couponLoading
+              ? "Applying..."
+              : "Apply"}
+          </button>
+        </div>
+
+        {appliedCoupon && (
+          <p className="text-green-400 text-sm mt-3">
+            Coupon {appliedCoupon.code} applied successfully.
+          </p>
+        )}
+      </div>
+
+      <div className="mt-5 pt-4 space-y-3 border-t border-[#D4AF37]/20">
+        <SummaryRow label="Subtotal" value={money(subtotal)} />
+
+        {discountAmount > 0 && (
+          <SummaryRow
+            label={`Discount (${appliedCoupon?.code})`}
+            value={`- ${money(discountAmount)}`}
+            danger
+          />
+        )}
+
+        <SummaryRow
+          label="Shipping"
+          value={isFreeShipping ? "Free" : money(finalShipping)}
+          highlight={isFreeShipping}
+        />
+
+        <SummaryRow label={`Tax (${taxPercentage}%)`} value={money(taxAmount)} />
+
+        <div className="pt-3 flex justify-between border-t border-slate-700 text-white font-bold text-lg">
+          <span>Grand Total</span>
+          <span className="text-[#D4AF37]">{money(grandTotal)}</span>
+        </div>
       </div>
     </div>
   );
@@ -474,28 +471,24 @@ function Input({ name, value, onChange, placeholder, type = "text" }) {
       type={type}
       placeholder={placeholder}
       value={value}
-      className="w-full border text-white placeholder-gray-400 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
+      onChange={onChange}
+      required
+      className="w-full border text-white placeholder-gray-400 p-3 rounded-lg outline-none focus:ring-2 focus:ring-[#D4AF37]"
       style={{
         backgroundColor: "rgba(10,22,40,0.8)",
         borderColor: "rgba(212,175,55,0.2)",
       }}
-      onChange={onChange}
-      required
     />
   );
 }
 
 function SummaryRow({ label, value, highlight = false, danger = false }) {
   return (
-    <div className="flex justify-between items-center text-sm">
+    <div className="flex justify-between text-sm">
       <span className="text-gray-300">{label}</span>
       <span
         className={`font-semibold ${
-          danger
-            ? "text-red-400"
-            : highlight
-            ? "text-green-400"
-            : "text-gray-200"
+          danger ? "text-red-400" : highlight ? "text-green-400" : "text-gray-200"
         }`}
       >
         {value}
