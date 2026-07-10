@@ -10,22 +10,25 @@ const {
   deleteProduct,
 } = require("../controllers/productController");
 
-// Get All Products
+const {
+  verifyToken,
+  verifyAdmin,
+} = require("../middleware/authMiddleware");
+
+// ==========================
+// Public Products
+// ==========================
+
 router.get("/", getProducts);
-
-// Get Featured Products
 router.get("/featured", getFeaturedProducts);
-
-// Get Single Product
 router.get("/:id", getProduct);
 
-// Add Product
-router.post("/", createProduct);
+// ==========================
+// Admin Products
+// ==========================
 
-// Update Product
-router.put("/:id", updateProduct);
-
-// Delete Product
-router.delete("/:id", deleteProduct);
+router.post("/", verifyToken, verifyAdmin, createProduct);
+router.put("/:id", verifyToken, verifyAdmin, updateProduct);
+router.delete("/:id", verifyToken, verifyAdmin, deleteProduct);
 
 module.exports = router;

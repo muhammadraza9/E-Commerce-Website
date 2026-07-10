@@ -159,3 +159,18 @@ model returnrequest {
 
   @@index([email])
 }
+
+model activitylog {
+  id         Int      @id @default(autoincrement())
+  adminId    Int?
+  adminEmail String?
+  action     String
+  entity     String
+  entityId   String?
+  message    String    @db.Text
+  createdAt  DateTime  @default(now())
+
+  @@index([adminId])
+  @@index([entity])
+  @@index([createdAt])
+}

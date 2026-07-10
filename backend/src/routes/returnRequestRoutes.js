@@ -11,18 +11,19 @@ const {
 
 const { verifyToken, verifyAdmin } = require("../middleware/authMiddleware");
 
-// Customer routes
+// ==========================
+// Customer Returns
+// ==========================
+
 router.post("/", verifyToken, createReturnRequest);
 router.get("/my", verifyToken, getMyReturnRequests);
 
-// Admin routes
+// ==========================
+// Admin Returns
+// ==========================
+
 router.get("/", verifyToken, verifyAdmin, getReturnRequests);
-router.patch(
-  "/:id/status",
-  verifyToken,
-  verifyAdmin,
-  updateReturnRequestStatus
-);
+router.patch("/:id/status", verifyToken, verifyAdmin, updateReturnRequestStatus);
 router.delete("/:id", verifyToken, verifyAdmin, deleteReturnRequest);
 
 module.exports = router;

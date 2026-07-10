@@ -12,6 +12,7 @@ const adminSettingRoutes = require("./routes/adminSettingRoutes");
 const couponRoutes = require("./routes/couponRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const returnRequestRoutes = require("./routes/returnRequestRoutes");
+const activityLogRoutes = require("./routes/activityLogRoutes");
 
 
 
@@ -78,6 +79,7 @@ app.use("/api/admin-settings", adminSettingRoutes);
 app.use("/api/coupons", couponRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/return-requests", returnRequestRoutes);
+app.use("/api/activity-logs", activityLogRoutes);
 /* ===========================
    404
 =========================== */

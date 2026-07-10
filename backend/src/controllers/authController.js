@@ -2,47 +2,67 @@ const prisma = require("../config/db");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const sendEmail = require("../utils/sendEmail");
+const createActivityLog = require("../utils/createActivityLog");
+
+const PASSWORD_MIN = 4;
+const PASSWORD_MAX = 9;
+const USER_SELECT = {
+  id: true,
+  username: true,
+  email: true,
+  role: true,
+  createdAt: true,
+};
+
+const normalizeEmail = (email = "") => email.trim().toLowerCase();
+
+const validPassword = (password) =>
+  password?.length >= PASSWORD_MIN && password.length <= PASSWORD_MAX;
+
+const logAdminAction = (req, data) =>
+  createActivityLog({
+    adminId: req.user?.id,
+    adminEmail: req.user?.email,
+    ...data,
+  });
 
 exports.register = async (req, res) => {
   try {
     const { username, email, password } = req.body;
+    const normalizedEmail = normalizeEmail(email);
 
-    if (!username || !email || !password) {
+    if (!username?.trim() || !normalizedEmail || !password) {
       return res.status(400).json({ message: "All fields are required" });
     }
 
-    if (password.length < 4 || password.length > 9) {
+    if (!validPassword(password)) {
       return res.status(400).json({
         message: "Password must be 4 to 9 characters",
       });
     }
 
     const exists = await prisma.user.findUnique({
-      where: { email: email.trim().toLowerCase() },
+      where: { email: normalizedEmail },
     });
 
     if (exists) {
       return res.status(400).json({ message: "User already exists" });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-
     const user = await prisma.user.create({
       data: {
         username: username.trim(),
-        email: email.trim().toLowerCase(),
-        password: hashedPassword,
+        email: normalizedEmail,
+        password: await bcrypt.hash(password, 10),
       },
+      select: USER_SELECT,
     });
 
-    const { password: userPassword, resetOtp, resetOtpExpiry, ...safeUser } =
-      user;
-
-    res.status(201).json(safeUser);
-  } catch (err) {
+    res.status(201).json(user);
+  } catch (error) {
     res.status(500).json({
       message: "Registration failed",
-      error: err.message,
+      error: error.message,
     });
   }
 };
@@ -51,52 +71,66 @@ exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    const user = await prisma.user.findUnique({
-      where: { email: email.trim().toLowerCase() },
-    });
-
-    if (!user) {
-      return res.status(400).json({ message: "Invalid Credentials" });
+    if (!email || !password) {
+      return res.status(400).json({
+        message: "Email and password are required",
+      });
     }
 
-    const match = await bcrypt.compare(password, user.password);
+    const user = await prisma.user.findUnique({
+      where: { email: normalizeEmail(email) },
+    });
 
-    if (!match) {
+    if (!user || !(await bcrypt.compare(password, user.password))) {
       return res.status(400).json({ message: "Invalid Credentials" });
     }
 
     const token = jwt.sign(
-      { id: user.id, role: user.role },
+      {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+      },
       process.env.JWT_SECRET,
       { expiresIn: "7d" }
     );
 
-    const { password: userPassword, resetOtp, resetOtpExpiry, ...safeUser } =
-      user;
+    const { password: _, resetOtp, resetOtpExpiry, ...safeUser } = user;
+
+    if (user.role === "ADMIN") {
+      await createActivityLog({
+        adminId: user.id,
+        adminEmail: user.email,
+        action: "LOGIN",
+        entity: "AUTH",
+        entityId: user.id,
+        message: `Admin "${user.email}" logged in`,
+      });
+    }
 
     res.json({
       token,
       role: user.role,
       user: safeUser,
     });
-  } catch (err) {
+  } catch (error) {
     res.status(500).json({
       message: "Login failed",
-      error: err.message,
+      error: error.message,
     });
   }
 };
 
 exports.forgotPassword = async (req, res) => {
   try {
-    const { email } = req.body;
+    const email = normalizeEmail(req.body.email);
 
-    if (!email || email.trim() === "") {
+    if (!email) {
       return res.status(400).json({ message: "Email is required" });
     }
 
     const user = await prisma.user.findUnique({
-      where: { email: email.trim().toLowerCase() },
+      where: { email },
     });
 
     if (!user) {
@@ -106,13 +140,12 @@ exports.forgotPassword = async (req, res) => {
     }
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const resetOtpExpiry = new Date(Date.now() + 10 * 60 * 1000);
 
     await prisma.user.update({
       where: { id: user.id },
       data: {
         resetOtp: otp,
-        resetOtpExpiry,
+        resetOtpExpiry: new Date(Date.now() + 10 * 60 * 1000),
       },
     });
 
@@ -120,27 +153,26 @@ exports.forgotPassword = async (req, res) => {
       to: user.email,
       subject: "Password Reset OTP - Style Avenue",
       html: `
-        <div style="font-family:Arial,sans-serif;background:#0B1F33;padding:30px;color:#ffffff;">
-          <div style="max-width:600px;margin:auto;background:#081421;border:1px solid #D4AF37;border-radius:14px;padding:30px;">
-            <h1 style="color:#D4AF37;margin-bottom:10px;">Style Avenue</h1>
+        <div style="font-family:Arial;background:#0B1F33;padding:30px;color:#fff">
+          <div style="max-width:600px;margin:auto;background:#081421;border:1px solid #D4AF37;border-radius:14px;padding:30px">
+            <h1 style="color:#D4AF37">Style Avenue</h1>
             <h2>Password Reset OTP</h2>
             <p>Hello <strong>${user.username}</strong>,</p>
             <p>Your password reset OTP is:</p>
-            <div style="font-size:34px;letter-spacing:8px;color:#D4AF37;font-weight:bold;margin:24px 0;">
+            <div style="font-size:34px;letter-spacing:8px;color:#D4AF37;font-weight:bold;margin:24px 0">
               ${otp}
             </div>
-            <p>This OTP will expire in <strong>10 minutes</strong>.</p>
-            <p>If you did not request this, you can safely ignore this email.</p>
+            <p>This OTP expires in <strong>10 minutes</strong>.</p>
           </div>
         </div>
       `,
     });
 
     res.json({ message: "OTP sent to your email" });
-  } catch (err) {
+  } catch (error) {
     res.status(500).json({
       message: "Failed to send OTP",
-      error: err.message,
+      error: error.message,
     });
   }
 };
@@ -155,7 +187,7 @@ exports.resetPassword = async (req, res) => {
       });
     }
 
-    if (newPassword.length < 4 || newPassword.length > 9) {
+    if (!validPassword(newPassword)) {
       return res.status(400).json({
         message: "Password must be 4 to 9 characters",
       });
@@ -163,11 +195,9 @@ exports.resetPassword = async (req, res) => {
 
     const user = await prisma.user.findFirst({
       where: {
-        email: email.trim().toLowerCase(),
+        email: normalizeEmail(email),
         resetOtp: otp.trim(),
-        resetOtpExpiry: {
-          gt: new Date(),
-        },
+        resetOtpExpiry: { gt: new Date() },
       },
     });
 
@@ -177,62 +207,52 @@ exports.resetPassword = async (req, res) => {
       });
     }
 
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-
     await prisma.user.update({
       where: { id: user.id },
       data: {
-        password: hashedPassword,
+        password: await bcrypt.hash(newPassword, 10),
         resetOtp: null,
         resetOtpExpiry: null,
       },
     });
 
     res.json({ message: "Password reset successfully" });
-  } catch (err) {
+  } catch (error) {
     res.status(500).json({
       message: "Password reset failed",
-      error: err.message,
+      error: error.message,
     });
   }
 };
 
 exports.updateProfile = async (req, res) => {
   try {
-    const userId = Number(req.user.id);
-    const { username } = req.body;
+    const username = req.body.username?.trim();
 
-    if (!username || username.trim() === "") {
+    if (!username) {
       return res.status(400).json({ message: "Username is required" });
     }
 
-    const updatedUser = await prisma.user.update({
-      where: { id: userId },
-      data: { username: username.trim() },
-      select: {
-        id: true,
-        username: true,
-        email: true,
-        role: true,
-        createdAt: true,
-      },
+    const user = await prisma.user.update({
+      where: { id: Number(req.user.id) },
+      data: { username },
+      select: USER_SELECT,
     });
 
     res.json({
       message: "Profile updated successfully",
-      user: updatedUser,
+      user,
     });
-  } catch (err) {
+  } catch (error) {
     res.status(500).json({
       message: "Profile update failed",
-      error: err.message,
+      error: error.message,
     });
   }
 };
 
 exports.changePassword = async (req, res) => {
   try {
-    const userId = Number(req.user.id);
     const { oldPassword, newPassword } = req.body;
 
     if (!oldPassword || !newPassword) {
@@ -241,7 +261,7 @@ exports.changePassword = async (req, res) => {
       });
     }
 
-    if (newPassword.length < 4 || newPassword.length > 9) {
+    if (!validPassword(newPassword)) {
       return res.status(400).json({
         message: "New password must be 4 to 9 characters",
       });
@@ -254,33 +274,31 @@ exports.changePassword = async (req, res) => {
     }
 
     const user = await prisma.user.findUnique({
-      where: { id: userId },
+      where: { id: Number(req.user.id) },
     });
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    const match = await bcrypt.compare(oldPassword, user.password);
-
-    if (!match) {
+    if (!(await bcrypt.compare(oldPassword, user.password))) {
       return res.status(400).json({
         message: "Old password is incorrect",
       });
     }
 
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-
     await prisma.user.update({
-      where: { id: userId },
-      data: { password: hashedPassword },
+      where: { id: user.id },
+      data: {
+        password: await bcrypt.hash(newPassword, 10),
+      },
     });
 
     res.json({ message: "Password changed successfully" });
-  } catch (err) {
+  } catch (error) {
     res.status(500).json({
       message: "Password change failed",
-      error: err.message,
+      error: error.message,
     });
   }
 };
@@ -288,113 +306,119 @@ exports.changePassword = async (req, res) => {
 exports.getAllUsers = async (req, res) => {
   try {
     const users = await prisma.user.findMany({
-      select: {
-        id: true,
-        username: true,
-        email: true,
-        role: true,
-        createdAt: true,
-      },
+      select: USER_SELECT,
       orderBy: { createdAt: "desc" },
     });
 
     res.json(users);
-  } catch (err) {
+  } catch (error) {
     res.status(500).json({
       message: "Failed to load users",
-      error: err.message,
+      error: error.message,
     });
   }
 };
 
 exports.updateUserRole = async (req, res) => {
   try {
-    const targetUserId = Number(req.params.id);
+    const id = Number(req.params.id);
     const { role } = req.body;
 
-    if (!targetUserId || Number.isNaN(targetUserId)) {
-      return res.status(400).json({ message: "Invalid user id" });
+    if (!id || !["USER", "ADMIN"].includes(role)) {
+      return res.status(400).json({
+        message: "Invalid user ID or role",
+      });
     }
 
-    if (!["USER", "ADMIN"].includes(role)) {
-      return res.status(400).json({ message: "Invalid role" });
-    }
-
-    if (Number(req.user.id) === targetUserId) {
+    if (Number(req.user.id) === id) {
       return res.status(400).json({
         message: "You cannot change your own role",
       });
     }
 
-    const existingUser = await prisma.user.findUnique({
-      where: { id: targetUserId },
-      select: {
-        id: true,
-        username: true,
-        email: true,
-        role: true,
-        createdAt: true,
-      },
+    const existing = await prisma.user.findUnique({
+      where: { id },
+      select: USER_SELECT,
     });
 
-    if (!existingUser) {
+    if (!existing) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    if (existingUser.role === role) {
+    if (existing.role === role) {
       return res.json({
         message: "User role is already updated",
-        user: existingUser,
+        user: existing,
       });
     }
 
-    const updatedUser = await prisma.user.update({
-      where: { id: targetUserId },
+    const user = await prisma.user.update({
+      where: { id },
       data: { role },
-      select: {
-        id: true,
-        username: true,
-        email: true,
-        role: true,
-        createdAt: true,
-      },
+      select: USER_SELECT,
+    });
+
+    await logAdminAction(req, {
+      action: "UPDATE_ROLE",
+      entity: "USER",
+      entityId: user.id,
+      message: `Changed "${user.email}" role from ${existing.role} to ${role}`,
     });
 
     res.json({
       message: "User role updated successfully",
-      user: updatedUser,
+      user,
     });
-  } catch (err) {
+  } catch (error) {
     res.status(500).json({
       message: "Failed to update user role",
-      error: err.message,
+      error: error.message,
     });
   }
 };
 
 exports.deleteUser = async (req, res) => {
   try {
-    const targetUserId = Number(req.params.id);
+    const id = Number(req.params.id);
 
-    if (!targetUserId || Number.isNaN(targetUserId)) {
-      return res.status(400).json({ message: "Invalid user id" });
+    if (!id) {
+      return res.status(400).json({ message: "Invalid user ID" });
     }
 
-    if (Number(req.user.id) === targetUserId) {
+    if (Number(req.user.id) === id) {
       return res.status(400).json({
         message: "You cannot delete your own account",
       });
     }
 
-    await prisma.user.delete({
-      where: { id: targetUserId },
+    const user = await prisma.user.findUnique({
+      where: { id },
+      select: USER_SELECT,
     });
 
-    res.json({ message: "User deleted successfully" });
-  } catch (err) {
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    await prisma.user.delete({
+      where: { id },
+    });
+
+    await logAdminAction(req, {
+      action: "DELETE",
+      entity: "USER",
+      entityId: user.id,
+      message: `Deleted user "${user.email}"`,
+    });
+
+    res.json({
+      success: true,
+      message: "User deleted successfully",
+    });
+  } catch (error) {
     res.status(500).json({
       message: "Failed to delete user",
-      error: err.message,
+      error: error.message,
     });
   }
 };

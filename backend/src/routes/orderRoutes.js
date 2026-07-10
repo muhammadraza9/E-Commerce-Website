@@ -12,30 +12,27 @@ const {
   cancelOrder,
 } = require("../controllers/orderController");
 
-const { verifyToken } = require("../middleware/authMiddleware");
+const {
+  verifyToken,
+  verifyAdmin,
+} = require("../middleware/authMiddleware");
 
-// Dashboard Stats
-router.get("/stats/dashboard", getStats);
+// ==========================
+// Customer
+// ==========================
 
-// User Order History
-router.get("/user/:email", getMyOrders);
-
-// Order Detail By ID
-router.get("/id/:id", getOrderById);
-
-// Create Order (must be logged in)
 router.post("/", verifyToken, createOrder);
-
-// Get All Orders
-router.get("/", getAllOrders);
-
-// Track Order
+router.get("/user/:email", verifyToken, getMyOrders);
+router.get("/id/:id", verifyToken, getOrderById);
+router.put("/:id/cancel", verifyToken, cancelOrder);
 router.get("/:trackingId", getOrder);
 
-// Update Order Status
-router.put("/:id/status", updateOrderStatus);
+// ==========================
+// Admin
+// ==========================
 
-// Cancel Order
-router.put("/:id/cancel", cancelOrder);
+router.get("/", verifyToken, verifyAdmin, getAllOrders);
+router.get("/stats/dashboard", verifyToken, verifyAdmin, getStats);
+router.put("/:id/status", verifyToken, verifyAdmin, updateOrderStatus);
 
 module.exports = router;

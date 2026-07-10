@@ -1,8 +1,19 @@
 const prisma = require("../config/db");
+const createActivityLog = require("../utils/createActivityLog");
 
-// ===============================
-// Get All Products + Search + Filter + Sort + Pagination
-// ===============================
+const getProductId = (value) => {
+  const id = Number(value);
+  return Number.isInteger(id) && id > 0 ? id : null;
+};
+
+const parseStock = (value) => Math.max(Number(value || 0), 0);
+
+const createAdminLog = (req, data) =>
+  createActivityLog({
+    adminId: req.user?.id,
+    adminEmail: req.user?.email,
+    ...data,
+  });
 
 const getProducts = async (req, res) => {
   try {
@@ -15,24 +26,15 @@ const getProducts = async (req, res) => {
       limit = 12,
     } = req.query;
 
-    const pageNumber = Math.max(parseInt(page) || 1, 1);
-    const limitNumber = Math.max(parseInt(limit) || 12, 1);
-    const skip = (pageNumber - 1) * limitNumber;
+    const currentPage = Math.max(Number.parseInt(page) || 1, 1);
+    const pageLimit = Math.max(Number.parseInt(limit) || 12, 1);
 
     const where = {};
 
-    if (search && search.trim()) {
+    if (search.trim()) {
       where.OR = [
-        {
-          name: {
-            contains: search.trim(),
-          },
-        },
-        {
-          description: {
-            contains: search.trim(),
-          },
-        },
+        { name: { contains: search.trim() } },
+        { description: { contains: search.trim() } },
       ];
     }
 
@@ -40,114 +42,73 @@ const getProducts = async (req, res) => {
       where.category = category;
     }
 
-    if (featured === "true") {
-      where.featured = true;
+    if (featured === "true" || featured === "false") {
+      where.featured = featured === "true";
     }
 
-    if (featured === "false") {
-      where.featured = false;
-    }
-
-    let orderBy = {
-      createdAt: "desc",
+    const sortOptions = {
+      oldest: { createdAt: "asc" },
+      price_asc: { price: "asc" },
+      price_desc: { price: "desc" },
+      stock_low: { stock: "asc" },
+      stock_high: { stock: "desc" },
+      newest: { createdAt: "desc" },
     };
-
-    switch (sort) {
-      case "oldest":
-        orderBy = { createdAt: "asc" };
-        break;
-
-      case "price_asc":
-        orderBy = { price: "asc" };
-        break;
-
-      case "price_desc":
-        orderBy = { price: "desc" };
-        break;
-
-      case "stock_low":
-        orderBy = { stock: "asc" };
-        break;
-
-      case "stock_high":
-        orderBy = { stock: "desc" };
-        break;
-
-      default:
-        orderBy = { createdAt: "desc" };
-    }
 
     const [products, totalProducts] = await Promise.all([
       prisma.product.findMany({
         where,
-        orderBy,
-        skip,
-        take: limitNumber,
+        orderBy: sortOptions[sort] || sortOptions.newest,
+        skip: (currentPage - 1) * pageLimit,
+        take: pageLimit,
       }),
-
-      prisma.product.count({
-        where,
-      }),
+      prisma.product.count({ where }),
     ]);
 
-    res.status(200).json({
+    res.json({
       products,
-      currentPage: pageNumber,
-      totalPages: Math.ceil(totalProducts / limitNumber),
+      currentPage,
+      totalPages: Math.ceil(totalProducts / pageLimit),
       totalProducts,
     });
-  } catch (err) {
-    console.error("GET PRODUCTS ERROR:", err);
+  } catch (error) {
+    console.error("Get products error:", error.message);
 
     res.status(500).json({
-      message: "Server Error",
+      message: "Failed to load products",
     });
   }
 };
-
-// ===============================
-// Get Featured Products
-// ===============================
 
 const getFeaturedProducts = async (req, res) => {
   try {
     const products = await prisma.product.findMany({
-      where: {
-        featured: true,
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
+      where: { featured: true },
+      orderBy: { createdAt: "desc" },
     });
 
-    res.status(200).json(products);
-  } catch (err) {
-    console.error("GET FEATURED PRODUCTS ERROR:", err);
+    res.json(products);
+  } catch (error) {
+    console.error("Get featured products error:", error.message);
 
     res.status(500).json({
-      message: "Server Error",
+      message: "Failed to load featured products",
     });
   }
 };
 
-// ===============================
-// Get Single Product
-// ===============================
-
 const getProduct = async (req, res) => {
   try {
-    const id = Number(req.params.id);
+    const id = getProductId(req.params.id);
 
-    if (!id || Number.isNaN(id)) {
+    if (!id) {
       return res.status(400).json({
-        message: "Invalid product id",
+        message: "Invalid product ID",
       });
     }
 
     const product = await prisma.product.findUnique({
-      where: {
-        id,
-      },
+      where: { id },
     });
 
     if (!product) {
@@ -156,19 +117,15 @@ const getProduct = async (req, res) => {
       });
     }
 
-    res.status(200).json(product);
-  } catch (err) {
-    console.error("GET PRODUCT ERROR:", err);
+    res.json(product);
+  } catch (error) {
+    console.error("Get product error:", error.message);
 
     res.status(500).json({
-      message: "Server Error",
+      message: "Failed to load product",
     });
   }
 };
-
-// ===============================
-// Create Product
-// ===============================
 
 const createProduct = async (req, res) => {
   try {
@@ -177,52 +134,71 @@ const createProduct = async (req, res) => {
       description,
       image,
       price,
-      category,
-      featured,
-      stock,
+      category = "Clothing",
+      featured = false,
+      stock = 0,
     } = req.body;
 
-    if (!name || !description || !image || price === undefined) {
+    if (!name?.trim() || !description?.trim() || !image || price === undefined) {
       return res.status(400).json({
         message: "Name, description, image and price are required",
       });
     }
 
-    const productStock = Math.max(Number(stock || 0), 0);
+    const productPrice = Number(price);
+
+    if (!Number.isFinite(productPrice) || productPrice < 0) {
+      return res.status(400).json({
+        message: "Invalid product price",
+      });
+    }
 
     const product = await prisma.product.create({
       data: {
         name: name.trim(),
         description: description.trim(),
         image,
-        price: Number(price),
-        category: category || "Clothing",
+        price: productPrice,
+        category,
         featured: Boolean(featured),
-        stock: productStock,
+        stock: parseStock(stock),
       },
     });
 
+    await createAdminLog(req, {
+      action: "CREATE",
+      entity: "PRODUCT",
+      entityId: product.id,
+      message: `Created product "${product.name}"`,
+    });
+
     res.status(201).json(product);
-  } catch (err) {
-    console.error("CREATE PRODUCT ERROR:", err);
+  } catch (error) {
+    console.error("Create product error:", error.message);
 
     res.status(500).json({
-      message: "Server Error",
+      message: "Failed to create product",
     });
   }
 };
 
-// ===============================
-// Update Product
-// ===============================
-
 const updateProduct = async (req, res) => {
   try {
-    const id = Number(req.params.id);
+    const id = getProductId(req.params.id);
 
-    if (!id || Number.isNaN(id)) {
+    if (!id) {
       return res.status(400).json({
-        message: "Invalid product id",
+        message: "Invalid product ID",
+      });
+    }
+
+    const existing = await prisma.product.findUnique({
+      where: { id },
+    });
+
+    if (!existing) {
+      return res.status(404).json({
+        message: "Product not found",
       });
     }
 
@@ -236,62 +212,89 @@ const updateProduct = async (req, res) => {
       stock,
     } = req.body;
 
-    const productStock = Math.max(Number(stock || 0), 0);
+    const data = {};
+
+    if (name !== undefined) data.name = name.trim();
+    if (description !== undefined) data.description = description.trim();
+    if (image !== undefined) data.image = image;
+    if (category !== undefined) data.category = category;
+    if (featured !== undefined) data.featured = Boolean(featured);
+    if (stock !== undefined) data.stock = parseStock(stock);
+
+    if (price !== undefined) {
+      const productPrice = Number(price);
+
+      if (!Number.isFinite(productPrice) || productPrice < 0) {
+        return res.status(400).json({
+          message: "Invalid product price",
+        });
+      }
+
+      data.price = productPrice;
+    }
 
     const product = await prisma.product.update({
-      where: {
-        id,
-      },
-      data: {
-        name: name?.trim(),
-        description: description?.trim(),
-        image,
-        price: Number(price),
-        category,
-        featured: Boolean(featured),
-        stock: productStock,
-      },
+      where: { id },
+      data,
     });
 
-    res.status(200).json(product);
-  } catch (err) {
-    console.error("UPDATE PRODUCT ERROR:", err);
+    await createAdminLog(req, {
+      action: "UPDATE",
+      entity: "PRODUCT",
+      entityId: product.id,
+      message: `Updated product "${product.name}"`,
+    });
+
+    res.json(product);
+  } catch (error) {
+    console.error("Update product error:", error.message);
 
     res.status(500).json({
-      message: "Server Error",
+      message: "Failed to update product",
     });
   }
 };
 
-// ===============================
-// Delete Product
-// ===============================
-
 const deleteProduct = async (req, res) => {
   try {
-    const id = Number(req.params.id);
+    const id = getProductId(req.params.id);
 
-    if (!id || Number.isNaN(id)) {
+    if (!id) {
       return res.status(400).json({
-        message: "Invalid product id",
+        message: "Invalid product ID",
+      });
+    }
+
+    const product = await prisma.product.findUnique({
+      where: { id },
+    });
+
+    if (!product) {
+      return res.status(404).json({
+        message: "Product not found",
       });
     }
 
     await prisma.product.delete({
-      where: {
-        id,
-      },
+      where: { id },
     });
 
-    res.status(200).json({
+    await createAdminLog(req, {
+      action: "DELETE",
+      entity: "PRODUCT",
+      entityId: product.id,
+      message: `Deleted product "${product.name}"`,
+    });
+
+    res.json({
       success: true,
       message: "Product deleted successfully",
     });
-  } catch (err) {
-    console.error("DELETE PRODUCT ERROR:", err);
+  } catch (error) {
+    console.error("Delete product error:", error.message);
 
     res.status(500).json({
-      message: "Server Error",
+      message: "Failed to delete product",
     });
   }
 };

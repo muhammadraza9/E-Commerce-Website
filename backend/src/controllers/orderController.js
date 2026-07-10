@@ -1,81 +1,52 @@
 const prisma = require("../config/db");
 const sendEmail = require("../utils/sendEmail");
 const createNotification = require("../utils/createNotification");
+const createActivityLog = require("../utils/createActivityLog");
 
-const generateTrackingId = () => {
-  return "TRK-" + Math.random().toString(36).substring(2, 8).toUpperCase();
+const ORDER_STATUSES = [
+  "Pending",
+  "Processing",
+  "Shipped",
+  "Delivered",
+  "Cancelled",
+];
+
+const generateTrackingId = () =>
+  `TRK-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+
+const orderInclude = {
+  items: {
+    include: {
+      product: true,
+    },
+  },
 };
 
-const sendOrderEmails = async ({
-  customer,
-  email,
-  phone,
-  address,
-  trackingId,
-  paymentMethod,
-  couponCode,
-  subtotal,
-  discountAmount,
-  shippingFee,
-  taxAmount,
-  grandTotal,
-}) => {
-  const couponHtml = couponCode
-    ? `<p><strong>Coupon:</strong> ${couponCode}</p>`
-    : "";
+const createLog = (req, data) =>
+  createActivityLog({
+    adminId: req.user?.id,
+    adminEmail: req.user?.email,
+    ...data,
+  });
 
-  const orderHtml = `
-    <div>
-      <h2>Thank You For Your Order 🎉</h2>
-      <p>Hello <strong>${customer}</strong></p>
-      <p>Your order has been placed successfully.</p>
-      <p><strong>Tracking ID:</strong> ${trackingId}</p>
-      <p><strong>Payment Method:</strong> ${paymentMethod || "COD"}</p>
-      ${couponHtml}
-      <p><strong>Subtotal:</strong> Rs ${subtotal}</p>
-      <p><strong>Discount:</strong> Rs ${discountAmount}</p>
-      <p><strong>Shipping:</strong> Rs ${shippingFee}</p>
-      <p><strong>Tax:</strong> Rs ${taxAmount}</p>
-      <p><strong>Total:</strong> Rs ${grandTotal}</p>
-    </div>
-  `;
-
-  const adminHtml = `
-    <div>
-      <h2>New Order Received 🛒</h2>
-      <p><strong>Customer:</strong> ${customer}</p>
-      <p><strong>Email:</strong> ${email}</p>
-      <p><strong>Phone:</strong> ${phone}</p>
-      <p><strong>Address:</strong> ${address}</p>
-      <p><strong>Tracking ID:</strong> ${trackingId}</p>
-      <p><strong>Payment Method:</strong> ${paymentMethod || "COD"}</p>
-      ${couponHtml}
-      <p><strong>Subtotal:</strong> Rs ${subtotal}</p>
-      <p><strong>Discount:</strong> Rs ${discountAmount}</p>
-      <p><strong>Shipping:</strong> Rs ${shippingFee}</p>
-      <p><strong>Tax:</strong> Rs ${taxAmount}</p>
-      <p><strong>Total:</strong> Rs ${grandTotal}</p>
-    </div>
-  `;
-
+const sendOrderEmail = async ({ to, subject, html }) => {
   try {
-    await sendEmail({
-      to: email,
-      subject: "Order Confirmation",
-      html: orderHtml,
-    });
-  } catch (err) {
-    console.error("Customer Email Error:", err.message);
+    await sendEmail({ to, subject, html });
+  } catch (error) {
+    console.error("Order email error:", error.message);
   }
+};
 
-  try {
-    await sendEmail({
-      to: process.env.ADMIN_EMAIL,
-      subject: "New Order Received",
-      html: adminHtml,
+const restoreOrderStock = async (tx, items) => {
+  for (const item of items) {
+    await tx.product.update({
+      where: { id: item.productId },
+      data: {
+        stock: {
+          increment: item.quantity,
+        },
+      },
     });
-  } catch (err) {
-    console.error("Admin Email Error:", err.message);
   }
 };
 
@@ -86,47 +57,41 @@ exports.createOrder = async (req, res) => {
       email,
       phone,
       address,
-      total,
       subtotal,
-      discountAmount,
+      discountAmount = 0,
       couponCode,
-      shippingFee,
-      taxAmount,
-      taxPercentage,
+      shippingFee = 0,
+      taxAmount = 0,
+      taxPercentage = 0,
       grandTotal,
-      paymentMethod,
+      paymentMethod = "COD",
       items,
     } = req.body;
 
-    if (!items || !Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ message: "Order items are required" });
+    if (!customer || !email || !phone || !address) {
+      return res.status(400).json({
+        message: "Customer information is required",
+      });
     }
 
-    const userId = req.user?.id;
-    const finalCouponCode = couponCode ? couponCode.trim().toUpperCase() : null;
+    if (!Array.isArray(items) || !items.length) {
+      return res.status(400).json({
+        message: "Order items are required",
+      });
+    }
 
-    const finalSubtotal =
-      Number(subtotal) ||
-      items.reduce(
-        (sum, item) =>
-          sum + Number(item.price || 0) * Number(item.quantity || 1),
-        0
-      );
-
-    const finalDiscountAmount = Number(discountAmount || 0);
-    const finalShippingFee = Number(shippingFee || 0);
-    const finalTaxAmount = Number(taxAmount || 0);
-    const finalTaxPercentage = Number(taxPercentage || 0);
-
-    const finalGrandTotal =
-      Number(grandTotal) ||
-      Number(total) ||
-      finalSubtotal - finalDiscountAmount + finalShippingFee + finalTaxAmount;
-
-    const productIds = items.map((item) => Number(item.productId));
+    const normalizedItems = items.map((item) => ({
+      productId: Number(item.productId),
+      quantity: Number(item.quantity || 1),
+      price: Number(item.price || 0),
+    }));
 
     const products = await prisma.product.findMany({
-      where: { id: { in: productIds } },
+      where: {
+        id: {
+          in: normalizedItems.map((item) => item.productId),
+        },
+      },
       select: {
         id: true,
         name: true,
@@ -134,83 +99,95 @@ exports.createOrder = async (req, res) => {
       },
     });
 
-    for (const item of items) {
-      const product = products.find((p) => p.id === Number(item.productId));
+    for (const item of normalizedItems) {
+      const product = products.find(
+        (productItem) => productItem.id === item.productId
+      );
 
       if (!product) {
-        return res.status(404).json({ message: "Product not found" });
+        return res.status(404).json({
+          message: "Product not found",
+        });
       }
 
-      if (Number(product.stock) < Number(item.quantity)) {
+      if (item.quantity < 1 || product.stock < item.quantity) {
         return res.status(400).json({
-          message: `${product.name} has only ${product.stock} item(s) left in stock`,
+          message: `${product.name} has only ${product.stock} item(s) left`,
         });
       }
     }
 
+    const finalSubtotal =
+      Number(subtotal) ||
+      normalizedItems.reduce(
+        (sum, item) => sum + item.price * item.quantity,
+        0
+      );
+
+    const finalDiscount = Number(discountAmount || 0);
+    const finalShipping = Number(shippingFee || 0);
+    const finalTax = Number(taxAmount || 0);
+    const finalTotal =
+      Number(grandTotal) ||
+      finalSubtotal - finalDiscount + finalShipping + finalTax;
+
     const trackingId = generateTrackingId();
+    const normalizedCoupon = couponCode?.trim().toUpperCase() || null;
+    const stockAlerts = [];
 
     const order = await prisma.$transaction(async (tx) => {
       const createdOrder = await tx.order.create({
         data: {
           trackingId,
-          userId,
-          customer,
-          email,
-          phone,
-          address,
+          userId: req.user?.id || null,
+          customer: customer.trim(),
+          email: email.trim().toLowerCase(),
+          phone: phone.trim(),
+          address: address.trim(),
           subtotal: finalSubtotal,
-          discountAmount: finalDiscountAmount,
-          couponCode: finalCouponCode,
-          shippingFee: finalShippingFee,
-          taxAmount: finalTaxAmount,
-          taxPercentage: finalTaxPercentage,
-          grandTotal: finalGrandTotal,
-          total: finalGrandTotal,
-          paymentMethod: paymentMethod || "COD",
+          discountAmount: finalDiscount,
+          couponCode: normalizedCoupon,
+          shippingFee: finalShipping,
+          taxAmount: finalTax,
+          taxPercentage: Number(taxPercentage || 0),
+          grandTotal: finalTotal,
+          total: finalTotal,
+          paymentMethod,
           items: {
-            create: items.map((item) => ({
-              productId: Number(item.productId),
-              quantity: Number(item.quantity),
-              price: Number(item.price),
-            })),
+            create: normalizedItems,
           },
         },
-        include: {
-          items: true,
-        },
+        include: orderInclude,
       });
 
-      for (const item of items) {
-  const updatedProduct = await tx.product.update({
-    where: {
-      id: Number(item.productId),
-    },
-    data: {
-      stock: {
-        decrement: Number(item.quantity),
-      },
-    },
-  });
+      for (const item of normalizedItems) {
+        const product = await tx.product.update({
+          where: { id: item.productId },
+          data: {
+            stock: {
+              decrement: item.quantity,
+            },
+          },
+        });
 
-  if (updatedProduct.stock === 0) {
-    await createNotification({
-      title: "Out Of Stock",
-      message: `${updatedProduct.name} is now out of stock.`,
-      type: "OUT_OF_STOCK",
-    });
-  } else if (updatedProduct.stock <= 5) {
-    await createNotification({
-      title: "Low Stock Alert",
-      message: `${updatedProduct.name} has only ${updatedProduct.stock} item(s) remaining.`,
-      type: "LOW_STOCK",
-    });
-  }
-}
+        if (product.stock === 0) {
+          stockAlerts.push({
+            title: "Out Of Stock",
+            message: `${product.name} is now out of stock.`,
+            type: "OUT_OF_STOCK",
+          });
+        } else if (product.stock <= 5) {
+          stockAlerts.push({
+            title: "Low Stock Alert",
+            message: `${product.name} has only ${product.stock} item(s) remaining.`,
+            type: "LOW_STOCK",
+          });
+        }
+      }
 
-      if (finalCouponCode) {
+      if (normalizedCoupon) {
         await tx.coupon.update({
-          where: { code: finalCouponCode },
+          where: { code: normalizedCoupon },
           data: {
             usedCount: {
               increment: 1,
@@ -222,37 +199,63 @@ exports.createOrder = async (req, res) => {
       return createdOrder;
     });
 
-    await createNotification({
-      title: "New Order Received",
-      message: `Order ${trackingId} received from ${customer}. Total: Rs ${finalGrandTotal}`,
-      type: "ORDER",
-    });
+    await Promise.all([
+      createNotification({
+        title: "New Order Received",
+        message: `Order ${trackingId} received from ${customer}. Total: Rs ${finalTotal}`,
+        type: "ORDER",
+      }),
+      ...stockAlerts.map(createNotification),
+    ]);
 
-    await sendOrderEmails({
-      customer,
-      email,
-      phone,
-      address,
-      trackingId,
-      paymentMethod,
-      couponCode: finalCouponCode,
-      subtotal: finalSubtotal,
-      discountAmount: finalDiscountAmount,
-      shippingFee: finalShippingFee,
-      taxAmount: finalTaxAmount,
-      grandTotal: finalGrandTotal,
-    });
+    const orderDetails = `
+      <p><strong>Tracking ID:</strong> ${trackingId}</p>
+      <p><strong>Payment Method:</strong> ${paymentMethod}</p>
+      <p><strong>Subtotal:</strong> Rs ${finalSubtotal}</p>
+      <p><strong>Discount:</strong> Rs ${finalDiscount}</p>
+      <p><strong>Shipping:</strong> Rs ${finalShipping}</p>
+      <p><strong>Tax:</strong> Rs ${finalTax}</p>
+      <p><strong>Total:</strong> Rs ${finalTotal}</p>
+    `;
+
+    await Promise.all([
+      sendOrderEmail({
+        to: email,
+        subject: "Order Confirmation",
+        html: `
+          <h2>Thank You For Your Order</h2>
+          <p>Hello <strong>${customer}</strong>, your order has been placed.</p>
+          ${orderDetails}
+        `,
+      }),
+
+      process.env.ADMIN_EMAIL
+        ? sendOrderEmail({
+            to: process.env.ADMIN_EMAIL,
+            subject: "New Order Received",
+            html: `
+              <h2>New Order Received</h2>
+              <p><strong>Customer:</strong> ${customer}</p>
+              <p><strong>Email:</strong> ${email}</p>
+              <p><strong>Phone:</strong> ${phone}</p>
+              <p><strong>Address:</strong> ${address}</p>
+              ${orderDetails}
+            `,
+          })
+        : Promise.resolve(),
+    ]);
 
     res.status(201).json({
       success: true,
       trackingId,
       order,
     });
-  } catch (err) {
-    console.error("Create Order Error:", err.message);
+  } catch (error) {
+    console.error("Create order error:", error.message);
 
     res.status(500).json({
-      error: err.message,
+      message: "Failed to create order",
+      error: error.message,
     });
   }
 };
@@ -263,57 +266,128 @@ exports.getOrder = async (req, res) => {
       where: {
         trackingId: req.params.trackingId,
       },
-      include: {
-        items: {
-          include: {
-            product: true,
-          },
-        },
-      },
+      include: orderInclude,
     });
 
     if (!order) {
-      return res.status(404).json({ message: "Order not found" });
+      return res.status(404).json({
+        message: "Order not found",
+      });
     }
 
     res.json(order);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+  } catch (error) {
+    res.status(500).json({
+      message: "Failed to load order",
+      error: error.message,
+    });
   }
 };
 
 exports.getAllOrders = async (req, res) => {
   try {
     const orders = await prisma.order.findMany({
-      include: {
-        items: {
-          include: {
-            product: true,
-          },
-        },
-      },
+      include: orderInclude,
       orderBy: {
         createdAt: "desc",
       },
     });
 
     res.json(orders);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+  } catch (error) {
+    res.status(500).json({
+      message: "Failed to load orders",
+      error: error.message,
+    });
+  }
+};
+
+exports.getMyOrders = async (req, res) => {
+  try {
+    const email = req.params.email.trim().toLowerCase();
+
+    const orders = await prisma.order.findMany({
+      where: { email },
+      include: orderInclude,
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    res.json(orders);
+  } catch (error) {
+    res.status(500).json({
+      message: "Failed to load user orders",
+      error: error.message,
+    });
+  }
+};
+
+exports.getOrderById = async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+
+    const order = await prisma.order.findUnique({
+      where: { id },
+      include: orderInclude,
+    });
+
+    if (!order) {
+      return res.status(404).json({
+        message: "Order not found",
+      });
+    }
+
+    res.json(order);
+  } catch (error) {
+    res.status(500).json({
+      message: "Failed to load order",
+      error: error.message,
+    });
   }
 };
 
 exports.updateOrderStatus = async (req, res) => {
   try {
+    const id = Number(req.params.id);
     const { status } = req.body;
 
-    const order = await prisma.order.update({
-      where: {
-        id: Number(req.params.id),
+    if (!ORDER_STATUSES.includes(status)) {
+      return res.status(400).json({
+        message: "Invalid order status",
+      });
+    }
+
+    const existing = await prisma.order.findUnique({
+      where: { id },
+      include: {
+        items: true,
       },
-      data: {
-        status,
-      },
+    });
+
+    if (!existing) {
+      return res.status(404).json({
+        message: "Order not found",
+      });
+    }
+
+    if (existing.status === status) {
+      return res.json({
+        success: true,
+        message: `Order is already ${status}`,
+        order: existing,
+      });
+    }
+
+    const order = await prisma.$transaction(async (tx) => {
+      if (status === "Cancelled" && existing.status !== "Cancelled") {
+        await restoreOrderStock(tx, existing.items);
+      }
+
+      return tx.order.update({
+        where: { id },
+        data: { status },
+      });
     });
 
     await createNotification({
@@ -322,165 +396,70 @@ exports.updateOrderStatus = async (req, res) => {
       type: "ORDER",
     });
 
-    try {
-      await sendEmail({
-        to: order.email,
-        subject: "Order Status Updated",
-        html: `
-          <div>
-            <h2>Order Status Updated</h2>
-            <p>Hello ${order.customer}</p>
-            <p>Your order status has been updated.</p>
-            <p><strong>Tracking ID:</strong> ${order.trackingId}</p>
-            <p><strong>Status:</strong> ${status}</p>
-          </div>
-        `,
-      });
-    } catch (emailErr) {
-      console.error("Status Update Email Error:", emailErr.message);
-    }
+    await createLog(req, {
+      action: "UPDATE_STATUS",
+      entity: "ORDER",
+      entityId: order.id,
+      message: `Changed order ${order.trackingId} status from ${existing.status} to ${status}`,
+    });
+
+    await sendOrderEmail({
+      to: order.email,
+      subject: "Order Status Updated",
+      html: `
+        <h2>Order Status Updated</h2>
+        <p>Hello ${order.customer},</p>
+        <p><strong>Tracking ID:</strong> ${order.trackingId}</p>
+        <p><strong>Status:</strong> ${status}</p>
+      `,
+    });
 
     res.json({
       success: true,
       order,
     });
-  } catch (err) {
-    console.error("Update Order Status Error:", err.message);
+  } catch (error) {
+    console.error("Update order status error:", error.message);
 
     res.status(500).json({
-      error: err.message,
-    });
-  }
-};
-
-exports.getStats = async (req, res) => {
-  try {
-    const totalOrders = await prisma.order.count();
-
-    const revenueData = await prisma.order.aggregate({
-      _sum: {
-        total: true,
-      },
-    });
-
-    const pendingOrders = await prisma.order.count({
-      where: { status: "Pending" },
-    });
-
-    const processingOrders = await prisma.order.count({
-      where: { status: "Processing" },
-    });
-
-    const shippedOrders = await prisma.order.count({
-      where: { status: "Shipped" },
-    });
-
-    const deliveredOrders = await prisma.order.count({
-      where: { status: "Delivered" },
-    });
-
-    res.json({
-      totalOrders,
-      revenue: revenueData._sum.total || 0,
-      pendingOrders,
-      processingOrders,
-      shippedOrders,
-      deliveredOrders,
-    });
-  } catch (err) {
-    console.error("Stats Error:", err.message);
-
-    res.status(500).json({
-      error: err.message,
-    });
-  }
-};
-
-exports.getMyOrders = async (req, res) => {
-  try {
-    const { email } = req.params;
-
-    const orders = await prisma.order.findMany({
-      where: {
-        email,
-      },
-      include: {
-        items: {
-          include: {
-            product: true,
-          },
-        },
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
-
-    res.status(200).json(orders);
-  } catch (err) {
-    console.error("Get My Orders Error:", err.message);
-
-    res.status(500).json({
-      success: false,
-      error: err.message,
-    });
-  }
-};
-
-exports.getOrderById = async (req, res) => {
-  try {
-    const order = await prisma.order.findUnique({
-      where: {
-        id: Number(req.params.id),
-      },
-      include: {
-        items: {
-          include: {
-            product: true,
-          },
-        },
-      },
-    });
-
-    if (!order) {
-      return res.status(404).json({ message: "Order not found" });
-    }
-
-    res.json(order);
-  } catch (err) {
-    console.error("Get Order By Id Error:", err.message);
-
-    res.status(500).json({
-      error: err.message,
+      message: "Failed to update order status",
+      error: error.message,
     });
   }
 };
 
 exports.cancelOrder = async (req, res) => {
   try {
-    const order = await prisma.order.findUnique({
-      where: {
-        id: Number(req.params.id),
+    const id = Number(req.params.id);
+
+    const existing = await prisma.order.findUnique({
+      where: { id },
+      include: {
+        items: true,
       },
     });
 
-    if (!order) {
-      return res.status(404).json({ message: "Order not found" });
-    }
-
-    if (order.status === "Delivered" || order.status === "Cancelled") {
-      return res.status(400).json({
-        message: "Delivered or Cancelled orders cannot be cancelled",
+    if (!existing) {
+      return res.status(404).json({
+        message: "Order not found",
       });
     }
 
-    const updatedOrder = await prisma.order.update({
-      where: {
-        id: Number(req.params.id),
-      },
-      data: {
-        status: "Cancelled",
-      },
+    if (["Delivered", "Cancelled"].includes(existing.status)) {
+      return res.status(400).json({
+        message: "Delivered or cancelled orders cannot be cancelled",
+      });
+    }
+
+    const order = await prisma.$transaction(async (tx) => {
+      await restoreOrderStock(tx, existing.items);
+
+      return tx.order.update({
+        where: { id },
+        data: {
+          status: "Cancelled",
+        },
+      });
     });
 
     await createNotification({
@@ -489,15 +468,61 @@ exports.cancelOrder = async (req, res) => {
       type: "ORDER",
     });
 
+    await createLog(req, {
+      action: "CANCEL",
+      entity: "ORDER",
+      entityId: order.id,
+      message: `Cancelled order ${order.trackingId}`,
+    });
+
     res.json({
       success: true,
-      order: updatedOrder,
+      order,
     });
-  } catch (err) {
-    console.error("Cancel Order Error:", err.message);
+  } catch (error) {
+    console.error("Cancel order error:", error.message);
 
     res.status(500).json({
-      error: err.message,
+      message: "Failed to cancel order",
+      error: error.message,
+    });
+  }
+};
+
+exports.getStats = async (req, res) => {
+  try {
+    const [
+      totalOrders,
+      revenue,
+      pendingOrders,
+      processingOrders,
+      shippedOrders,
+      deliveredOrders,
+    ] = await Promise.all([
+      prisma.order.count(),
+      prisma.order.aggregate({
+        _sum: {
+          total: true,
+        },
+      }),
+      prisma.order.count({ where: { status: "Pending" } }),
+      prisma.order.count({ where: { status: "Processing" } }),
+      prisma.order.count({ where: { status: "Shipped" } }),
+      prisma.order.count({ where: { status: "Delivered" } }),
+    ]);
+
+    res.json({
+      totalOrders,
+      revenue: revenue._sum.total || 0,
+      pendingOrders,
+      processingOrders,
+      shippedOrders,
+      deliveredOrders,
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Failed to load order statistics",
+      error: error.message,
     });
   }
 };

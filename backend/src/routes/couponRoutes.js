@@ -11,7 +11,15 @@ const {
 
 const { verifyToken, verifyAdmin } = require("../middleware/authMiddleware");
 
+// ==========================
+// Customer
+// ==========================
+
 router.post("/apply", applyCoupon);
+
+// ==========================
+// Admin
+// ==========================
 
 router.get("/", verifyToken, verifyAdmin, getCoupons);
 router.post("/", verifyToken, verifyAdmin, createCoupon);

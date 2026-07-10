@@ -8,7 +8,11 @@ const {
 
 const { verifyToken, verifyAdmin } = require("../middleware/authMiddleware");
 
-router.get("/", getAdminSettings);
+// ==========================
+// Admin Settings
+// ==========================
+
+router.get("/", verifyToken, verifyAdmin, getAdminSettings);
 router.put("/", verifyToken, verifyAdmin, updateAdminSettings);
 
 module.exports = router;

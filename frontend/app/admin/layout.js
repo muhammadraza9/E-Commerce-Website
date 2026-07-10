@@ -9,6 +9,7 @@ import {
   FiSettings,
   FiArrowLeftCircle,
   FiPercent,
+  FiActivity,
 } from "react-icons/fi";
 
 export default function AdminLayout({ children }) {
@@ -62,18 +63,26 @@ export default function AdminLayout({ children }) {
           </Link>
 
           <Link
-               href="/admin/notifications"
-              className="flex items-center gap-3 bg-slate-800 text-white px-4 py-3 rounded-lg hover:bg-[#D4AF37] hover:text-black transition-all duration-300"
-              >
-              🔔 Notifications
-            </Link>
+            href="/admin/notifications"
+            className="flex items-center gap-3 bg-slate-800 text-white px-4 py-3 rounded-lg hover:bg-[#D4AF37] hover:text-black transition-all duration-300"
+          >
+            🔔 Notifications
+          </Link>
 
-            <Link
-              href="/admin/returns"
-              className="flex items-center gap-3 bg-slate-800 text-white px-4 py-3 rounded-lg hover:bg-[#D4AF37] hover:text-black transition-all duration-300"
-              >
-              📦 Returns
-            </Link>
+          <Link
+            href="/admin/returns"
+            className="flex items-center gap-3 bg-slate-800 text-white px-4 py-3 rounded-lg hover:bg-[#D4AF37] hover:text-black transition-all duration-300"
+          >
+            📦 Returns
+          </Link>
+
+          <Link
+            href="/admin/activity-logs"
+            className="flex items-center gap-3 bg-slate-800 text-white px-4 py-3 rounded-lg hover:bg-[#D4AF37] hover:text-black transition-all duration-300"
+          >
+            <FiActivity size={20} />
+            Activity Logs
+          </Link>
 
           <Link
             href="/admin/settings"

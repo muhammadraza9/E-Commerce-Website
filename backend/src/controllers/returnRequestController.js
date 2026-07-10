@@ -1,54 +1,56 @@
 const prisma = require("../config/db");
 const sendEmail = require("../utils/sendEmail");
 const createNotification = require("../utils/createNotification");
+const createActivityLog = require("../utils/createActivityLog");
 
 const VALID_STATUSES = ["Pending", "Approved", "Rejected"];
 
-const sendStatusEmail = async (request) => {
+const sendSafeEmail = async (options) => {
   try {
-    await sendEmail({
-      to: request.email,
-      subject: "Return Request Status Updated",
-      html: `
-        <h2>Return Request Update</h2>
-        <p>Hello <strong>${request.customer}</strong>,</p>
-        <p>Your return request for order <strong>#${request.orderId}</strong> has been updated.</p>
-        <p><strong>Status:</strong> ${request.status}</p>
-      `,
-    });
+    await sendEmail(options);
   } catch (error) {
-    console.error("Return status email error:", error.message);
+    console.error("Return email error:", error.message);
   }
 };
 
+const createLog = (req, data) =>
+  createActivityLog({
+    adminId: req.user?.id,
+    adminEmail: req.user?.email,
+    ...data,
+  });
+
 exports.createReturnRequest = async (req, res) => {
   try {
-    const { orderId, reason, message } = req.body;
     const userId = Number(req.user.id);
+    const orderId = Number(req.body.orderId);
+    const reason = req.body.reason?.trim();
+    const message = req.body.message?.trim() || null;
 
-    if (!orderId || !reason?.trim()) {
+    if (!orderId || !reason) {
       return res.status(400).json({
         message: "Order ID and reason are required",
       });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        username: true,
-        email: true,
-      },
-    });
+    const [user, order, existing] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: { username: true, email: true },
+      }),
+      prisma.order.findUnique({
+        where: { id: orderId },
+      }),
+      prisma.returnrequest.findUnique({
+        where: { orderId },
+      }),
+    ]);
 
     if (!user) {
       return res.status(404).json({
         message: "User not found",
       });
     }
-
-    const order = await prisma.order.findUnique({
-      where: { id: Number(orderId) },
-    });
 
     if (!order) {
       return res.status(404).json({
@@ -68,12 +70,6 @@ exports.createReturnRequest = async (req, res) => {
       });
     }
 
-    const existing = await prisma.returnrequest.findUnique({
-      where: {
-        orderId: Number(orderId),
-      },
-    });
-
     if (existing) {
       return res.status(400).json({
         message: "Return request already submitted for this order",
@@ -82,11 +78,11 @@ exports.createReturnRequest = async (req, res) => {
 
     const request = await prisma.returnrequest.create({
       data: {
-        orderId: Number(orderId),
+        orderId,
         customer: user.username,
         email: user.email.toLowerCase(),
-        reason: reason.trim(),
-        message: message?.trim() || null,
+        reason,
+        message,
       },
     });
 
@@ -97,22 +93,18 @@ exports.createReturnRequest = async (req, res) => {
     });
 
     if (process.env.ADMIN_EMAIL) {
-      try {
-        await sendEmail({
-          to: process.env.ADMIN_EMAIL,
-          subject: "New Return Request",
-          html: `
-            <h2>New Return Request</h2>
-            <p><strong>Order ID:</strong> #${orderId}</p>
-            <p><strong>Customer:</strong> ${user.username}</p>
-            <p><strong>Email:</strong> ${user.email}</p>
-            <p><strong>Reason:</strong> ${reason.trim()}</p>
-            <p><strong>Message:</strong> ${message?.trim() || "N/A"}</p>
-          `,
-        });
-      } catch (error) {
-        console.error("Admin return email error:", error.message);
-      }
+      await sendSafeEmail({
+        to: process.env.ADMIN_EMAIL,
+        subject: "New Return Request",
+        html: `
+          <h2>New Return Request</h2>
+          <p><strong>Order ID:</strong> #${orderId}</p>
+          <p><strong>Customer:</strong> ${user.username}</p>
+          <p><strong>Email:</strong> ${user.email}</p>
+          <p><strong>Reason:</strong> ${reason}</p>
+          <p><strong>Message:</strong> ${message || "N/A"}</p>
+        `,
+      });
     }
 
     res.status(201).json({
@@ -133,9 +125,7 @@ exports.createReturnRequest = async (req, res) => {
 exports.getReturnRequests = async (req, res) => {
   try {
     const requests = await prisma.returnrequest.findMany({
-      orderBy: {
-        createdAt: "desc",
-      },
+      orderBy: { createdAt: "desc" },
     });
 
     res.json(requests);
@@ -150,12 +140,8 @@ exports.getReturnRequests = async (req, res) => {
 exports.getMyReturnRequests = async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
-      where: {
-        id: Number(req.user.id),
-      },
-      select: {
-        email: true,
-      },
+      where: { id: Number(req.user.id) },
+      select: { email: true },
     });
 
     if (!user) {
@@ -165,12 +151,8 @@ exports.getMyReturnRequests = async (req, res) => {
     }
 
     const requests = await prisma.returnrequest.findMany({
-      where: {
-        email: user.email.toLowerCase(),
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
+      where: { email: user.email.toLowerCase() },
+      orderBy: { createdAt: "desc" },
     });
 
     res.json(requests);
@@ -194,9 +176,7 @@ exports.updateReturnRequestStatus = async (req, res) => {
     }
 
     const existing = await prisma.returnrequest.findUnique({
-      where: {
-        id: requestId,
-      },
+      where: { id: requestId },
     });
 
     if (!existing) {
@@ -216,12 +196,8 @@ exports.updateReturnRequestStatus = async (req, res) => {
     const request = await prisma.$transaction(async (tx) => {
       if (status === "Approved" && !existing.stockRestored) {
         const order = await tx.order.findUnique({
-          where: {
-            id: existing.orderId,
-          },
-          include: {
-            items: true,
-          },
+          where: { id: existing.orderId },
+          include: { items: true },
         });
 
         if (!order) {
@@ -230,9 +206,7 @@ exports.updateReturnRequestStatus = async (req, res) => {
 
         for (const item of order.items) {
           await tx.product.update({
-            where: {
-              id: item.productId,
-            },
+            where: { id: item.productId },
             data: {
               stock: {
                 increment: item.quantity,
@@ -243,9 +217,7 @@ exports.updateReturnRequestStatus = async (req, res) => {
       }
 
       return tx.returnrequest.update({
-        where: {
-          id: requestId,
-        },
+        where: { id: requestId },
         data: {
           status,
           stockRestored:
@@ -254,13 +226,31 @@ exports.updateReturnRequestStatus = async (req, res) => {
       });
     });
 
-    await createNotification({
-      title: "Return Request Updated",
-      message: `Return request for order #${request.orderId} was ${status}.`,
-      type: "RETURN",
-    });
+    await Promise.all([
+      createNotification({
+        title: "Return Request Updated",
+        message: `Return request for order #${request.orderId} was ${status}.`,
+        type: "RETURN",
+      }),
 
-    await sendStatusEmail(request);
+      createLog(req, {
+        action: "UPDATE_STATUS",
+        entity: "RETURN_REQUEST",
+        entityId: request.id,
+        message: `Changed return request #${request.id} from ${existing.status} to ${status}`,
+      }),
+
+      sendSafeEmail({
+        to: request.email,
+        subject: "Return Request Status Updated",
+        html: `
+          <h2>Return Request Update</h2>
+          <p>Hello <strong>${request.customer}</strong>,</p>
+          <p>Your return request for order <strong>#${request.orderId}</strong> has been updated.</p>
+          <p><strong>Status:</strong> ${request.status}</p>
+        `,
+      }),
+    ]);
 
     res.json({
       success: true,
@@ -290,22 +280,25 @@ exports.deleteReturnRequest = async (req, res) => {
       });
     }
 
-    const existing = await prisma.returnrequest.findUnique({
-      where: {
-        id: requestId,
-      },
+    const request = await prisma.returnrequest.findUnique({
+      where: { id: requestId },
     });
 
-    if (!existing) {
+    if (!request) {
       return res.status(404).json({
         message: "Return request not found",
       });
     }
 
     await prisma.returnrequest.delete({
-      where: {
-        id: requestId,
-      },
+      where: { id: requestId },
+    });
+
+    await createLog(req, {
+      action: "DELETE",
+      entity: "RETURN_REQUEST",
+      entityId: request.id,
+      message: `Deleted return request #${request.id} for order #${request.orderId}`,
     });
 
     res.json({
@@ -313,6 +306,8 @@ exports.deleteReturnRequest = async (req, res) => {
       message: "Return request deleted",
     });
   } catch (error) {
+    console.error("Delete return request error:", error.message);
+
     res.status(500).json({
       message: "Failed to delete return request",
       error: error.message,
