@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import api from "@/services/api";
 import { showSuccessToast, showErrorToast } from "@/utils/toast";
 
@@ -16,6 +16,10 @@ export default function AdminReturnsPage() {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  useEffect(() => {
+    fetchRequests();
+  }, []);
+
   const fetchRequests = async () => {
     try {
       setLoading(true);
@@ -28,17 +32,21 @@ export default function AdminReturnsPage() {
     }
   };
 
-  useEffect(() => {
-    fetchRequests();
-  }, []);
-
   const updateStatus = async (id, status) => {
     try {
       await api.patch(`/return-requests/${id}/status`, { status });
+
+      setRequests((prev) =>
+        prev.map((item) =>
+          item.id === id ? { ...item, status } : item
+        )
+      );
+
       showSuccessToast("Return request updated");
-      fetchRequests();
-    } catch {
-      showErrorToast("Failed to update request");
+    } catch (error) {
+      showErrorToast(
+        error?.response?.data?.message || "Failed to update request"
+      );
     }
   };
 
@@ -47,12 +55,23 @@ export default function AdminReturnsPage() {
 
     try {
       await api.delete(`/return-requests/${id}`);
+
+      setRequests((prev) => prev.filter((item) => item.id !== id));
       showSuccessToast("Return request deleted");
-      fetchRequests();
     } catch {
       showErrorToast("Failed to delete request");
     }
   };
+
+  const stats = useMemo(
+    () => ({
+      total: requests.length,
+      pending: requests.filter((item) => item.status === "Pending").length,
+      approved: requests.filter((item) => item.status === "Approved").length,
+      rejected: requests.filter((item) => item.status === "Rejected").length,
+    }),
+    [requests]
+  );
 
   if (loading) {
     return <div className="text-gray-400 text-center py-20">Loading...</div>;
@@ -68,6 +87,25 @@ export default function AdminReturnsPage() {
         <h1 className="text-4xl font-bold text-white mt-2">
           Return <span className="text-[#D4AF37]">Requests</span>
         </h1>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
+        <StatCard title="Total Requests" value={stats.total} />
+        <StatCard
+          title="Pending"
+          value={stats.pending}
+          color="text-yellow-400"
+        />
+        <StatCard
+          title="Approved"
+          value={stats.approved}
+          color="text-green-400"
+        />
+        <StatCard
+          title="Rejected"
+          value={stats.rejected}
+          color="text-red-400"
+        />
       </div>
 
       {requests.length === 0 ? (
@@ -134,7 +172,9 @@ export default function AdminReturnsPage() {
                     className="w-44 bg-[#071827] border border-[#D4AF37]/30 rounded-lg px-4 py-2.5 text-white text-sm outline-none focus:border-[#D4AF37]"
                   >
                     {statuses.map((status) => (
-                      <option key={status}>{status}</option>
+                      <option key={status} value={status}>
+                        {status}
+                      </option>
                     ))}
                   </select>
 
@@ -150,6 +190,15 @@ export default function AdminReturnsPage() {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function StatCard({ title, value, color = "text-white" }) {
+  return (
+    <div className="bg-[#0d1117] border border-slate-700 rounded-2xl p-5">
+      <p className="text-gray-400 text-sm">{title}</p>
+      <h2 className={`text-2xl font-bold mt-1 ${color}`}>{value}</h2>
     </div>
   );
 }

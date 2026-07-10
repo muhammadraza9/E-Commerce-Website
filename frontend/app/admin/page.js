@@ -28,36 +28,45 @@ const MONTHS = [
   "Dec",
 ];
 
-const formatCurrency = (value) => {
-  return `Rs ${Number(value || 0).toLocaleString("en-PK")}`;
+const DEFAULT_ANALYTICS = {
+  totalRevenue: 0,
+  totalOrders: 0,
+  totalUsers: 0,
+  totalProducts: 0,
+  totalReviews: 0,
+  revenueGrowth: 0,
+  currentMonthRevenue: 0,
+  lastMonthRevenue: 0,
+
+  orderStatusSummary: {
+    Pending: 0,
+    Processing: 0,
+    Shipped: 0,
+    Delivered: 0,
+    Cancelled: 0,
+  },
+
+  returnSummary: {
+    total: 0,
+    pending: 0,
+    approved: 0,
+    rejected: 0,
+  },
+
+  recentOrders: [],
+  latestUsers: [],
+  latestReviews: [],
+  monthlyRevenue: [],
+  topSellingProducts: [],
+  topCustomers: [],
+  recentPayments: [],
 };
 
-export default function AdminPage() {
-  const [analytics, setAnalytics] = useState({
-    totalRevenue: 0,
-    totalOrders: 0,
-    totalUsers: 0,
-    totalProducts: 0,
-    totalReviews: 0,
-    revenueGrowth: 0,
-    currentMonthRevenue: 0,
-    lastMonthRevenue: 0,
-    orderStatusSummary: {
-      Pending: 0,
-      Processing: 0,
-      Shipped: 0,
-      Delivered: 0,
-      Cancelled: 0,
-    },
-    recentOrders: [],
-    latestUsers: [],
-    latestReviews: [],
-    monthlyRevenue: [],
-    topSellingProducts: [],
-    topCustomers: [],
-    recentPayments: [],
-  });
+const formatCurrency = (value) =>
+  `Rs ${Number(value || 0).toLocaleString("en-PK")}`;
 
+export default function AdminPage() {
+  const [analytics, setAnalytics] = useState(DEFAULT_ANALYTICS);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -68,12 +77,20 @@ export default function AdminPage() {
     try {
       const res = await api.get("/analytics/dashboard");
 
-      setAnalytics((prev) => ({
-        ...prev,
+      setAnalytics({
+        ...DEFAULT_ANALYTICS,
         ...res.data,
-      }));
+        orderStatusSummary: {
+          ...DEFAULT_ANALYTICS.orderStatusSummary,
+          ...res.data?.orderStatusSummary,
+        },
+        returnSummary: {
+          ...DEFAULT_ANALYTICS.returnSummary,
+          ...res.data?.returnSummary,
+        },
+      });
     } catch (error) {
-      console.error(error);
+      console.error("Dashboard load error:", error);
     } finally {
       setLoading(false);
     }
@@ -82,51 +99,67 @@ export default function AdminPage() {
   const monthlyRevenueData = useMemo(() => {
     const backendData = analytics.monthlyRevenue || [];
 
-    if (backendData.length > 0) {
-      return MONTHS.map((month) => {
-        const found = backendData.find((item) => item.month === month);
+    return MONTHS.map((month) => {
+      const found = backendData.find((item) => item.month === month);
 
-        return {
-          month,
-          revenue: Number(found?.revenue || 0),
-        };
-      });
-    }
-
-    return MONTHS.map((month) => ({
-      month,
-      revenue: 0,
-    }));
+      return {
+        month,
+        revenue: Number(found?.revenue || 0),
+      };
+    });
   }, [analytics.monthlyRevenue]);
 
   const hasGraphData = monthlyRevenueData.some(
-    (item) => Number(item.revenue) > 0
+    (item) => item.revenue > 0
   );
 
   const statusCards = [
     {
       label: "Pending",
-      value: analytics.orderStatusSummary?.Pending || 0,
+      value: analytics.orderStatusSummary.Pending,
       color: "text-yellow-400",
     },
     {
       label: "Processing",
-      value: analytics.orderStatusSummary?.Processing || 0,
+      value: analytics.orderStatusSummary.Processing,
       color: "text-cyan-400",
     },
     {
       label: "Shipped",
-      value: analytics.orderStatusSummary?.Shipped || 0,
+      value: analytics.orderStatusSummary.Shipped,
       color: "text-blue-400",
     },
     {
       label: "Delivered",
-      value: analytics.orderStatusSummary?.Delivered || 0,
+      value: analytics.orderStatusSummary.Delivered,
       color: "text-green-400",
     },
     {
       label: "Cancelled",
-      value: analytics.orderStatusSummary?.Cancelled || 0,
+      value: analytics.orderStatusSummary.Cancelled,
+      color: "text-red-400",
+    },
+  ];
+
+  const returnCards = [
+    {
+      label: "Total Returns",
+      value: analytics.returnSummary.total,
+      color: "text-white",
+    },
+    {
+      label: "Pending",
+      value: analytics.returnSummary.pending,
+      color: "text-yellow-400",
+    },
+    {
+      label: "Approved",
+      value: analytics.returnSummary.approved,
+      color: "text-green-400",
+    },
+    {
+      label: "Rejected",
+      value: analytics.returnSummary.rejected,
       color: "text-red-400",
     },
   ];
@@ -214,26 +247,39 @@ export default function AdminPage() {
 
         <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
           {statusCards.map((card) => (
-            <div
+            <SummaryCard
               key={card.label}
-              className="bg-[#071827] border border-[#D4AF37]/10 rounded-xl p-5"
-            >
-              <p className="text-gray-400 text-sm">{card.label}</p>
+              label={card.label}
+              value={card.value}
+              color={card.color}
+            />
+          ))}
+        </div>
+      </div>
 
-              <h3 className={`text-3xl font-bold mt-2 ${card.color}`}>
-                {card.value}
-              </h3>
-            </div>
+      <div className="bg-[#0B1F33] border border-[#D4AF37]/20 rounded-2xl p-6 mb-8 shadow-xl shadow-black/20">
+        <h2 className="text-xl font-bold text-white mb-5">
+          Return Request Summary
+        </h2>
+
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {returnCards.map((card) => (
+            <SummaryCard
+              key={card.label}
+              label={card.label}
+              value={card.value}
+              color={card.color}
+            />
           ))}
         </div>
       </div>
 
       <div className="grid lg:grid-cols-2 gap-8 mb-8">
         <Section title="Recent Orders">
-          {analytics.recentOrders?.length === 0 ? (
+          {analytics.recentOrders.length === 0 ? (
             <p className="text-gray-400">No recent orders found.</p>
           ) : (
-            analytics.recentOrders?.map((order) => (
+            analytics.recentOrders.map((order) => (
               <ListCard key={order.id}>
                 <div className="flex justify-between gap-3">
                   <div>
@@ -261,16 +307,20 @@ export default function AdminPage() {
         </Section>
 
         <Section title="Latest Users">
-          {analytics.latestUsers?.length === 0 ? (
+          {analytics.latestUsers.length === 0 ? (
             <p className="text-gray-400">No users found.</p>
           ) : (
-            analytics.latestUsers?.map((user) => (
+            analytics.latestUsers.map((user) => (
               <ListCard key={user.id}>
                 <div className="flex justify-between items-center gap-3">
                   <div>
-                    <p className="text-white font-semibold">{user.username}</p>
+                    <p className="text-white font-semibold">
+                      {user.username}
+                    </p>
 
-                    <p className="text-gray-400 text-sm">{user.email}</p>
+                    <p className="text-gray-400 text-sm">
+                      {user.email}
+                    </p>
                   </div>
 
                   <span className="text-xs px-3 py-1 rounded-full bg-[#D4AF37]/20 text-[#D4AF37]">
@@ -285,13 +335,13 @@ export default function AdminPage() {
 
       <div className="grid lg:grid-cols-2 gap-8 mb-8">
         <Section title="Top Selling Products">
-          {analytics.topSellingProducts?.length === 0 ? (
+          {analytics.topSellingProducts.length === 0 ? (
             <p className="text-gray-400">
               No product sales yet. Place an order with products and this
               section will show data.
             </p>
           ) : (
-            analytics.topSellingProducts?.map((product, index) => (
+            analytics.topSellingProducts.map((product, index) => (
               <ListCard key={product.productId || index}>
                 <div className="flex justify-between items-center gap-4">
                   <div className="flex items-center gap-3 min-w-0">
@@ -322,10 +372,10 @@ export default function AdminPage() {
         </Section>
 
         <Section title="Top Customers">
-          {analytics.topCustomers?.length === 0 ? (
+          {analytics.topCustomers.length === 0 ? (
             <p className="text-gray-400">No customer data found.</p>
           ) : (
-            analytics.topCustomers?.map((customer, index) => (
+            analytics.topCustomers.map((customer, index) => (
               <ListCard key={customer.email || index}>
                 <div className="flex justify-between items-center gap-3">
                   <div>
@@ -349,11 +399,11 @@ export default function AdminPage() {
       </div>
 
       <Section title="Recent Payments">
-        {analytics.recentPayments?.length === 0 ? (
+        {analytics.recentPayments.length === 0 ? (
           <p className="text-gray-400">No payments found.</p>
         ) : (
           <div className="grid md:grid-cols-2 gap-4">
-            {analytics.recentPayments?.map((payment) => (
+            {analytics.recentPayments.map((payment) => (
               <ListCard key={payment.id}>
                 <div className="flex justify-between items-start gap-3">
                   <div>
@@ -392,11 +442,11 @@ export default function AdminPage() {
 
       <div className="mt-8">
         <Section title="Latest Reviews">
-          {analytics.latestReviews?.length === 0 ? (
+          {analytics.latestReviews.length === 0 ? (
             <p className="text-gray-400">No reviews found.</p>
           ) : (
             <div className="grid md:grid-cols-2 gap-4">
-              {analytics.latestReviews?.map((review) => (
+              {analytics.latestReviews.map((review) => (
                 <ListCard key={review.id}>
                   <div className="flex justify-between items-start gap-3 mb-2">
                     <div>
@@ -411,6 +461,7 @@ export default function AdminPage() {
 
                     <p className="text-yellow-400">
                       {"★".repeat(review.rating)}
+
                       <span className="text-gray-600">
                         {"★".repeat(5 - review.rating)}
                       </span>
@@ -433,7 +484,9 @@ export default function AdminPage() {
 
       <div className="bg-[#0B1F33] border border-[#D4AF37]/20 rounded-2xl p-6 mt-8 shadow-xl shadow-black/20">
         <div className="mb-6">
-          <h2 className="text-xl font-bold text-white">Sales Analytics</h2>
+          <h2 className="text-xl font-bold text-white">
+            Sales Analytics
+          </h2>
 
           <p className="text-gray-400 text-sm mt-1">
             Monthly revenue flow based on orders.
@@ -508,7 +561,7 @@ export default function AdminPage() {
   );
 }
 
-function Card({ title, value, color }) {
+function Card({ title, value, color = "text-white" }) {
   return (
     <div className="bg-[#0B1F33] p-6 rounded-2xl border border-[#D4AF37]/20 shadow-xl shadow-black/20">
       <p className="text-gray-400 text-sm">{title}</p>
@@ -529,9 +582,23 @@ function SmallCard({ title, value, icon }) {
         <div>
           <p className="text-gray-400 text-sm">{title}</p>
 
-          <h3 className="text-xl font-bold text-[#D4AF37] mt-1">{value}</h3>
+          <h3 className="text-xl font-bold text-[#D4AF37] mt-1">
+            {value}
+          </h3>
         </div>
       </div>
+    </div>
+  );
+}
+
+function SummaryCard({ label, value, color }) {
+  return (
+    <div className="bg-[#071827] border border-[#D4AF37]/10 rounded-xl p-5">
+      <p className="text-gray-400 text-sm">{label}</p>
+
+      <h3 className={`text-3xl font-bold mt-2 ${color}`}>
+        {value}
+      </h3>
     </div>
   );
 }

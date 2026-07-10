@@ -22,6 +22,7 @@ exports.getDashboardAnalytics = async (req, res) => {
       totalUsers,
       totalProducts,
       totalReviews,
+      returnRequests,
       orders,
       recentOrders,
       latestUsers,
@@ -31,6 +32,12 @@ exports.getDashboardAnalytics = async (req, res) => {
       prisma.user.count(),
       prisma.product.count(),
       prisma.review.count(),
+
+      prisma.returnrequest.findMany({
+        select: {
+          status: true,
+        },
+      }),
 
       prisma.order.findMany({
         include: {
@@ -44,12 +51,16 @@ exports.getDashboardAnalytics = async (req, res) => {
 
       prisma.order.findMany({
         take: 5,
-        orderBy: { createdAt: "desc" },
+        orderBy: {
+          createdAt: "desc",
+        },
       }),
 
       prisma.user.findMany({
         take: 5,
-        orderBy: { createdAt: "desc" },
+        orderBy: {
+          createdAt: "desc",
+        },
         select: {
           id: true,
           username: true,
@@ -61,7 +72,9 @@ exports.getDashboardAnalytics = async (req, res) => {
 
       prisma.review.findMany({
         take: 5,
-        orderBy: { createdAt: "desc" },
+        orderBy: {
+          createdAt: "desc",
+        },
         include: {
           user: {
             select: {
@@ -84,27 +97,44 @@ exports.getDashboardAnalytics = async (req, res) => {
     );
 
     const orderStatusSummary = {
-      Pending: orders.filter((o) => o.status === "Pending").length,
-      Processing: orders.filter((o) => o.status === "Processing").length,
-      Shipped: orders.filter((o) => o.status === "Shipped").length,
-      Delivered: orders.filter((o) => o.status === "Delivered").length,
-      Cancelled: orders.filter((o) => o.status === "Cancelled").length,
+      Pending: 0,
+      Processing: 0,
+      Shipped: 0,
+      Delivered: 0,
+      Cancelled: 0,
     };
 
-    const monthlyRevenueMap = {};
-    MONTH_NAMES.forEach((month) => {
-      monthlyRevenueMap[month] = 0;
+    orders.forEach((order) => {
+      if (orderStatusSummary[order.status] !== undefined) {
+        orderStatusSummary[order.status] += 1;
+      }
     });
 
+    const returnSummary = {
+      total: returnRequests.length,
+      pending: 0,
+      approved: 0,
+      rejected: 0,
+    };
+
+    returnRequests.forEach((request) => {
+      if (request.status === "Pending") returnSummary.pending += 1;
+      if (request.status === "Approved") returnSummary.approved += 1;
+      if (request.status === "Rejected") returnSummary.rejected += 1;
+    });
+
+    const monthlyRevenueMap = Object.fromEntries(
+      MONTH_NAMES.map((month) => [month, 0])
+    );
+
     orders.forEach((order) => {
-      const date = new Date(order.createdAt);
-      const month = MONTH_NAMES[date.getMonth()];
+      const month = MONTH_NAMES[new Date(order.createdAt).getMonth()];
       monthlyRevenueMap[month] += Number(order.total || 0);
     });
 
     const monthlyRevenue = MONTH_NAMES.map((month) => ({
       month,
-      revenue: monthlyRevenueMap[month] || 0,
+      revenue: monthlyRevenueMap[month],
     }));
 
     const now = new Date();
@@ -115,25 +145,17 @@ exports.getDashboardAnalytics = async (req, res) => {
     const lastMonth = lastMonthDate.getMonth();
     const lastMonthYear = lastMonthDate.getFullYear();
 
-    const currentMonthRevenue = orders
-      .filter((order) => {
-        const date = new Date(order.createdAt);
-        return (
-          date.getMonth() === currentMonth &&
-          date.getFullYear() === currentYear
-        );
-      })
-      .reduce((sum, order) => sum + Number(order.total || 0), 0);
+    const getMonthRevenue = (month, year) =>
+      orders
+        .filter((order) => {
+          const date = new Date(order.createdAt);
 
-    const lastMonthRevenue = orders
-      .filter((order) => {
-        const date = new Date(order.createdAt);
-        return (
-          date.getMonth() === lastMonth &&
-          date.getFullYear() === lastMonthYear
-        );
-      })
-      .reduce((sum, order) => sum + Number(order.total || 0), 0);
+          return date.getMonth() === month && date.getFullYear() === year;
+        })
+        .reduce((sum, order) => sum + Number(order.total || 0), 0);
+
+    const currentMonthRevenue = getMonthRevenue(currentMonth, currentYear);
+    const lastMonthRevenue = getMonthRevenue(lastMonth, lastMonthYear);
 
     const revenueGrowth =
       lastMonthRevenue > 0
@@ -152,25 +174,24 @@ exports.getDashboardAnalytics = async (req, res) => {
     orders.forEach((order) => {
       order.items?.forEach((item) => {
         const productId = item.productId || item.product?.id;
-        const productName = item.product?.name || `Product #${productId}`;
-        const productImage = item.product?.image || "";
-        const quantity = Number(item.quantity || 0);
-        const revenue = Number(item.price || 0) * quantity;
 
         if (!productId) return;
 
         if (!productSalesMap[productId]) {
           productSalesMap[productId] = {
             productId,
-            name: productName,
-            image: productImage,
+            name: item.product?.name || `Product #${productId}`,
+            image: item.product?.image || "",
             quantitySold: 0,
             revenue: 0,
           };
         }
 
+        const quantity = Number(item.quantity || 0);
+
         productSalesMap[productId].quantitySold += quantity;
-        productSalesMap[productId].revenue += revenue;
+        productSalesMap[productId].revenue +=
+          Number(item.price || 0) * quantity;
       });
     });
 
@@ -217,6 +238,7 @@ exports.getDashboardAnalytics = async (req, res) => {
       totalProducts,
       totalReviews,
       orderStatusSummary,
+      returnSummary,
       recentOrders,
       latestUsers,
       latestReviews,
@@ -229,6 +251,8 @@ exports.getDashboardAnalytics = async (req, res) => {
       recentPayments,
     });
   } catch (error) {
+    console.error("Dashboard analytics error:", error.message);
+
     res.status(500).json({
       message: "Failed to load analytics",
       error: error.message,
