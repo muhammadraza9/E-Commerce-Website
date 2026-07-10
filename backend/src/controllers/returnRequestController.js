@@ -2,18 +2,75 @@ const prisma = require("../config/db");
 const sendEmail = require("../utils/sendEmail");
 const createNotification = require("../utils/createNotification");
 
+const VALID_STATUSES = ["Pending", "Approved", "Rejected"];
+
+const sendStatusEmail = async (request) => {
+  try {
+    await sendEmail({
+      to: request.email,
+      subject: "Return Request Status Updated",
+      html: `
+        <h2>Return Request Update</h2>
+        <p>Hello <strong>${request.customer}</strong>,</p>
+        <p>Your return request for order <strong>#${request.orderId}</strong> has been updated.</p>
+        <p><strong>Status:</strong> ${request.status}</p>
+      `,
+    });
+  } catch (error) {
+    console.error("Return status email error:", error.message);
+  }
+};
+
 exports.createReturnRequest = async (req, res) => {
   try {
-    const { orderId, customer, email, reason, message } = req.body;
+    const { orderId, reason, message } = req.body;
+    const userId = Number(req.user.id);
 
-    if (!orderId || !customer || !email || !reason) {
-      return res.status(400).json({ message: "Required fields missing" });
+    if (!orderId || !reason?.trim()) {
+      return res.status(400).json({
+        message: "Order ID and reason are required",
+      });
     }
 
-    const existing = await prisma.returnrequest.findFirst({
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        username: true,
+        email: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        message: "User not found",
+      });
+    }
+
+    const order = await prisma.order.findUnique({
+      where: { id: Number(orderId) },
+    });
+
+    if (!order) {
+      return res.status(404).json({
+        message: "Order not found",
+      });
+    }
+
+    if (order.email.toLowerCase() !== user.email.toLowerCase()) {
+      return res.status(403).json({
+        message: "You cannot return this order",
+      });
+    }
+
+    if (order.status !== "Delivered") {
+      return res.status(400).json({
+        message: "Only delivered orders can be returned",
+      });
+    }
+
+    const existing = await prisma.returnrequest.findUnique({
       where: {
         orderId: Number(orderId),
-        email,
       },
     });
 
@@ -26,32 +83,36 @@ exports.createReturnRequest = async (req, res) => {
     const request = await prisma.returnrequest.create({
       data: {
         orderId: Number(orderId),
-        customer,
-        email,
-        reason,
-        message: message || null,
+        customer: user.username,
+        email: user.email.toLowerCase(),
+        reason: reason.trim(),
+        message: message?.trim() || null,
       },
     });
 
     await createNotification({
       title: "New Return Request",
-      message: `${customer} submitted a return request for order #${orderId}.`,
+      message: `${user.username} submitted a return request for order #${orderId}.`,
       type: "RETURN",
     });
 
     if (process.env.ADMIN_EMAIL) {
-      await sendEmail({
-        to: process.env.ADMIN_EMAIL,
-        subject: "New Return Request",
-        html: `
-          <h2>New Return Request</h2>
-          <p><strong>Order ID:</strong> #${orderId}</p>
-          <p><strong>Customer:</strong> ${customer}</p>
-          <p><strong>Email:</strong> ${email}</p>
-          <p><strong>Reason:</strong> ${reason}</p>
-          <p><strong>Message:</strong> ${message || "N/A"}</p>
-        `,
-      });
+      try {
+        await sendEmail({
+          to: process.env.ADMIN_EMAIL,
+          subject: "New Return Request",
+          html: `
+            <h2>New Return Request</h2>
+            <p><strong>Order ID:</strong> #${orderId}</p>
+            <p><strong>Customer:</strong> ${user.username}</p>
+            <p><strong>Email:</strong> ${user.email}</p>
+            <p><strong>Reason:</strong> ${reason.trim()}</p>
+            <p><strong>Message:</strong> ${message?.trim() || "N/A"}</p>
+          `,
+        });
+      } catch (error) {
+        console.error("Admin return email error:", error.message);
+      }
     }
 
     res.status(201).json({
@@ -59,10 +120,12 @@ exports.createReturnRequest = async (req, res) => {
       message: "Return request submitted",
       request,
     });
-  } catch (err) {
+  } catch (error) {
+    console.error("Create return request error:", error.message);
+
     res.status(500).json({
       message: "Failed to submit return request",
-      error: err.message,
+      error: error.message,
     });
   }
 };
@@ -76,21 +139,34 @@ exports.getReturnRequests = async (req, res) => {
     });
 
     res.json(requests);
-  } catch (err) {
+  } catch (error) {
     res.status(500).json({
       message: "Failed to load return requests",
-      error: err.message,
+      error: error.message,
     });
   }
 };
 
-exports.getUserReturnRequests = async (req, res) => {
+exports.getMyReturnRequests = async (req, res) => {
   try {
-    const { email } = req.params;
+    const user = await prisma.user.findUnique({
+      where: {
+        id: Number(req.user.id),
+      },
+      select: {
+        email: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        message: "User not found",
+      });
+    }
 
     const requests = await prisma.returnrequest.findMany({
       where: {
-        email,
+        email: user.email.toLowerCase(),
       },
       orderBy: {
         createdAt: "desc",
@@ -98,29 +174,84 @@ exports.getUserReturnRequests = async (req, res) => {
     });
 
     res.json(requests);
-  } catch (err) {
+  } catch (error) {
     res.status(500).json({
-      message: "Failed to load user return requests",
-      error: err.message,
+      message: "Failed to load return requests",
+      error: error.message,
     });
   }
 };
 
 exports.updateReturnRequestStatus = async (req, res) => {
   try {
+    const requestId = Number(req.params.id);
     const { status } = req.body;
 
-    if (!["Pending", "Approved", "Rejected"].includes(status)) {
-      return res.status(400).json({ message: "Invalid status" });
+    if (!requestId || !VALID_STATUSES.includes(status)) {
+      return res.status(400).json({
+        message: "Invalid request or status",
+      });
     }
 
-    const request = await prisma.returnrequest.update({
+    const existing = await prisma.returnrequest.findUnique({
       where: {
-        id: Number(req.params.id),
+        id: requestId,
       },
-      data: {
-        status,
-      },
+    });
+
+    if (!existing) {
+      return res.status(404).json({
+        message: "Return request not found",
+      });
+    }
+
+    if (existing.status === status) {
+      return res.json({
+        success: true,
+        message: `Return request is already ${status}`,
+        request: existing,
+      });
+    }
+
+    const request = await prisma.$transaction(async (tx) => {
+      if (status === "Approved" && !existing.stockRestored) {
+        const order = await tx.order.findUnique({
+          where: {
+            id: existing.orderId,
+          },
+          include: {
+            items: true,
+          },
+        });
+
+        if (!order) {
+          throw new Error("Order not found");
+        }
+
+        for (const item of order.items) {
+          await tx.product.update({
+            where: {
+              id: item.productId,
+            },
+            data: {
+              stock: {
+                increment: item.quantity,
+              },
+            },
+          });
+        }
+      }
+
+      return tx.returnrequest.update({
+        where: {
+          id: requestId,
+        },
+        data: {
+          status,
+          stockRestored:
+            status === "Approved" ? true : existing.stockRestored,
+        },
+      });
     });
 
     await createNotification({
@@ -129,45 +260,62 @@ exports.updateReturnRequestStatus = async (req, res) => {
       type: "RETURN",
     });
 
-    await sendEmail({
-      to: request.email,
-      subject: "Return Request Status Updated",
-      html: `
-        <h2>Return Request Update</h2>
-        <p>Hello <strong>${request.customer}</strong>,</p>
-        <p>Your return request for order <strong>#${request.orderId}</strong> has been updated.</p>
-        <p><strong>Status:</strong> ${status}</p>
-      `,
-    });
+    await sendStatusEmail(request);
 
     res.json({
       success: true,
-      message: "Return request updated",
+      message:
+        status === "Approved"
+          ? "Return approved and stock restored"
+          : "Return request updated",
       request,
     });
-  } catch (err) {
+  } catch (error) {
+    console.error("Update return request error:", error.message);
+
     res.status(500).json({
       message: "Failed to update return request",
-      error: err.message,
+      error: error.message,
     });
   }
 };
 
 exports.deleteReturnRequest = async (req, res) => {
   try {
+    const requestId = Number(req.params.id);
+
+    if (!requestId) {
+      return res.status(400).json({
+        message: "Invalid return request ID",
+      });
+    }
+
+    const existing = await prisma.returnrequest.findUnique({
+      where: {
+        id: requestId,
+      },
+    });
+
+    if (!existing) {
+      return res.status(404).json({
+        message: "Return request not found",
+      });
+    }
+
     await prisma.returnrequest.delete({
       where: {
-        id: Number(req.params.id),
+        id: requestId,
       },
     });
 
     res.json({
+      success: true,
       message: "Return request deleted",
     });
-  } catch (err) {
+  } catch (error) {
     res.status(500).json({
       message: "Failed to delete return request",
-      error: err.message,
+      error: error.message,
     });
   }
 };

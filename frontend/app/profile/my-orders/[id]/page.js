@@ -25,7 +25,6 @@ export default function OrderDetailPage() {
   const { id } = useParams();
   const router = useRouter();
 
-  const [user, setUser] = useState(null);
   const [order, setOrder] = useState(null);
   const [returnRequest, setReturnRequest] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -48,24 +47,22 @@ export default function OrderDetailPage() {
         return;
       }
 
-      const parsedUser = JSON.parse(storedUser);
-      setUser(parsedUser);
+      const user = JSON.parse(storedUser);
 
       const [ordersRes, returnsRes] = await Promise.all([
-        api.get(`/orders/user/${parsedUser.email}`),
-        api.get(`/return-requests/user/${parsedUser.email}`),
+        api.get(`/orders/user/${user.email}`),
+        api.get("/return-requests/my"),
       ]);
 
-      const foundOrder = ordersRes.data.find(
-        (item) => String(item.id) === String(id)
+      setOrder(
+        ordersRes.data.find((item) => String(item.id) === String(id)) || null
       );
 
-      const foundReturn = returnsRes.data.find(
-        (item) => String(item.orderId) === String(id)
+      setReturnRequest(
+        returnsRes.data.find(
+          (item) => String(item.orderId) === String(id)
+        ) || null
       );
-
-      setOrder(foundOrder || null);
-      setReturnRequest(foundReturn || null);
     } catch (error) {
       console.log(error);
       showErrorToast("Failed to load order");
@@ -81,30 +78,26 @@ export default function OrderDetailPage() {
       await api.put(`/orders/${order.id}/cancel`);
       setOrder((prev) => ({ ...prev, status: "Cancelled" }));
       showSuccessToast("Order cancelled");
-    } catch (error) {
-      console.log(error);
+    } catch {
       showErrorToast("Unable to cancel order");
     }
   };
 
   const submitReturnRequest = async () => {
-    if (!order || !user) return;
-
     try {
       setReturnLoading(true);
 
       const res = await api.post("/return-requests", {
         orderId: order.id,
-        customer: user.username || order.customer,
-        email: user.email || order.email,
         reason,
         message,
       });
 
       setReturnRequest(res.data.request);
-      showSuccessToast("Return request submitted");
       setReturnOpen(false);
       setMessage("");
+
+      showSuccessToast("Return request submitted");
     } catch (error) {
       showErrorToast(
         error?.response?.data?.message || "Failed to submit return request"
@@ -114,14 +107,14 @@ export default function OrderDetailPage() {
     }
   };
 
-  const totalQuantity = useMemo(() => {
-    return (
+  const totalQuantity = useMemo(
+    () =>
       order?.items?.reduce(
         (sum, item) => sum + Number(item.quantity || 1),
         0
-      ) || 0
-    );
-  }, [order]);
+      ) || 0,
+    [order]
+  );
 
   if (loading) return <OrderDetailSkeleton />;
 
@@ -171,7 +164,8 @@ export default function OrderDetailPage() {
             {returnRequest && (
               <span
                 className={`px-4 py-2 rounded-full text-xs font-bold border ${
-                  returnStatusColor[returnRequest.status]
+                  returnStatusColor[returnRequest.status] ||
+                  returnStatusColor.Pending
                 }`}
               >
                 Return {returnRequest.status}
@@ -181,7 +175,7 @@ export default function OrderDetailPage() {
             <span
               className={`${
                 statusColor[order.status] || "bg-gray-500"
-              } px-4 py-2 rounded-full text-white text-sm font-medium w-fit`}
+              } px-4 py-2 rounded-full text-white text-sm font-medium`}
             >
               {order.status}
             </span>
@@ -190,23 +184,15 @@ export default function OrderDetailPage() {
 
         {returnRequest && (
           <div className="border border-[#D4AF37]/30 rounded-xl p-4 mb-8 bg-[#071827]">
-            <h2 className="text-white font-bold mb-3">Return Request Status</h2>
+            <h2 className="text-white font-bold mb-3">
+              Return Request Status
+            </h2>
 
-            <p className="text-gray-300">
-              <strong className="text-white">Status:</strong>{" "}
-              <span className="text-[#D4AF37]">{returnRequest.status}</span>
-            </p>
-
-            <p className="text-gray-300 mt-2">
-              <strong className="text-white">Reason:</strong>{" "}
-              {returnRequest.reason}
-            </p>
+            <Line label="Status" value={returnRequest.status} />
+            <Line label="Reason" value={returnRequest.reason} />
 
             {returnRequest.message && (
-              <p className="text-gray-300 mt-2">
-                <strong className="text-white">Message:</strong>{" "}
-                {returnRequest.message}
-              </p>
+              <Line label="Message" value={returnRequest.message} />
             )}
           </div>
         )}
@@ -243,11 +229,11 @@ export default function OrderDetailPage() {
             Ordered Products
           </h2>
 
-          {order.items && order.items.length > 0 ? (
+          {order.items?.length ? (
             <div className="space-y-4">
               {order.items.map((item, index) => (
                 <div
-                  key={index}
+                  key={item.id || index}
                   className="border border-slate-700 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-4"
                 >
                   <img
@@ -271,14 +257,17 @@ export default function OrderDetailPage() {
 
                     <p className="text-[#D4AF37] font-semibold mt-2">
                       Subtotal: Rs{" "}
-                      {Number(item.price || 0) * Number(item.quantity || 1)}
+                      {Number(item.price || 0) *
+                        Number(item.quantity || 1)}
                     </p>
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-gray-400">No products found in this order</p>
+            <p className="text-gray-400">
+              No products found in this order
+            </p>
           )}
         </div>
 
@@ -300,7 +289,7 @@ export default function OrderDetailPage() {
               </button>
             )}
 
-            {order.status !== "Delivered" && order.status !== "Cancelled" && (
+            {!["Delivered", "Cancelled"].includes(order.status) && (
               <button
                 onClick={cancelOrder}
                 className="px-5 py-3 rounded-lg bg-red-600 text-white font-semibold hover:bg-red-700 transition"
@@ -358,16 +347,19 @@ function ReturnModal({
   return (
     <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center px-4">
       <div className="w-full max-w-lg bg-slate-900 border border-[#D4AF37]/30 rounded-2xl p-6">
-        <h2 className="text-2xl font-bold text-white mb-2">Return Request</h2>
+        <h2 className="text-2xl font-bold text-white mb-2">
+          Return Request
+        </h2>
 
         <p className="text-gray-400 text-sm mb-5">
           Order: <span className="text-[#D4AF37]">{order.trackingId}</span>
         </p>
 
         <label className="block text-white mb-2">Reason</label>
+
         <select
           value={reason}
-          onChange={(e) => setReason(e.target.value)}
+          onChange={(event) => setReason(event.target.value)}
           className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-3 mb-4 outline-none focus:border-[#D4AF37]"
         >
           <option>Wrong Size</option>
@@ -378,10 +370,11 @@ function ReturnModal({
         </select>
 
         <label className="block text-white mb-2">Message</label>
+
         <textarea
           rows="4"
           value={message}
-          onChange={(e) => setMessage(e.target.value)}
+          onChange={(event) => setMessage(event.target.value)}
           placeholder="Write extra details..."
           className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-3 outline-none resize-none focus:border-[#D4AF37]"
         />

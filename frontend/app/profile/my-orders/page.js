@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import api from "@/services/api";
 import Link from "next/link";
+import api from "@/services/api";
 import MyOrdersSkeleton from "@/components/skeletons/MyOrdersSkeleton";
 import { showSuccessToast, showErrorToast } from "@/utils/toast";
 
@@ -36,8 +36,8 @@ export default function MyOrdersPage() {
   const [user, setUser] = useState(null);
   const [orders, setOrders] = useState([]);
   const [returns, setReturns] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("All");
+  const [loading, setLoading] = useState(true);
 
   const [returnOrder, setReturnOrder] = useState(null);
   const [reason, setReason] = useState("Wrong Size");
@@ -52,16 +52,16 @@ export default function MyOrdersPage() {
       return;
     }
 
-    const userData = JSON.parse(storedUser);
-    setUser(userData);
-    fetchData(userData.email);
+    const parsedUser = JSON.parse(storedUser);
+    setUser(parsedUser);
+    fetchData(parsedUser.email);
   }, [router]);
 
   const fetchData = async (email) => {
     try {
       const [ordersRes, returnsRes] = await Promise.all([
         api.get(`/orders/user/${email}`),
-        api.get(`/return-requests/user/${email}`),
+        api.get("/return-requests/my"),
       ]);
 
       setOrders(ordersRes.data || []);
@@ -74,13 +74,12 @@ export default function MyOrdersPage() {
     }
   };
 
-  const getReturnByOrderId = (orderId) => {
-    return returns.find((item) => Number(item.orderId) === Number(orderId));
-  };
+  const getReturnRequest = (orderId) =>
+    returns.find((item) => Number(item.orderId) === Number(orderId));
 
-  const cancelOrder = async (e, orderId) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const cancelOrder = async (event, orderId) => {
+    event.preventDefault();
+    event.stopPropagation();
 
     if (!confirm("Are you sure you want to cancel this order?")) return;
 
@@ -94,15 +93,14 @@ export default function MyOrdersPage() {
       );
 
       showSuccessToast("Order cancelled");
-    } catch (error) {
-      console.log(error);
+    } catch {
       showErrorToast("Unable to cancel order");
     }
   };
 
-  const openReturnModal = (e, order) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const openReturnModal = (event, order) => {
+    event.preventDefault();
+    event.stopPropagation();
 
     setReturnOrder(order);
     setReason("Wrong Size");
@@ -110,24 +108,22 @@ export default function MyOrdersPage() {
   };
 
   const submitReturnRequest = async () => {
-    if (!returnOrder || !user) return;
+    if (!returnOrder) return;
 
     try {
       setReturnLoading(true);
 
       const res = await api.post("/return-requests", {
         orderId: returnOrder.id,
-        customer: user.username || returnOrder.customer,
-        email: user.email || returnOrder.email,
         reason,
         message,
       });
 
       setReturns((prev) => [res.data.request, ...prev]);
-      showSuccessToast("Return request submitted");
-
       setReturnOrder(null);
       setMessage("");
+
+      showSuccessToast("Return request submitted");
     } catch (error) {
       showErrorToast(
         error?.response?.data?.message || "Failed to submit return request"
@@ -142,16 +138,17 @@ export default function MyOrdersPage() {
     return orders.filter((order) => order.status === filter);
   }, [orders, filter]);
 
-  const totalSpent = useMemo(() => {
-    return orders.reduce((sum, order) => sum + Number(order.total || 0), 0);
-  }, [orders]);
-
-  const totalDelivered = orders.filter(
-    (order) => order.status === "Delivered"
-  ).length;
+  const totalSpent = useMemo(
+    () => orders.reduce((sum, order) => sum + Number(order.total || 0), 0),
+    [orders]
+  );
 
   const activeOrders = orders.filter(
-    (order) => order.status !== "Delivered" && order.status !== "Cancelled"
+    (order) => !["Delivered", "Cancelled"].includes(order.status)
+  ).length;
+
+  const deliveredOrders = orders.filter(
+    (order) => order.status === "Delivered"
   ).length;
 
   if (loading) return <MyOrdersSkeleton />;
@@ -182,12 +179,16 @@ export default function MyOrdersPage() {
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
         <Stat title="Total Orders" value={orders.length} />
-        <Stat title="Active Orders" value={activeOrders} color="text-[#D4AF37]" />
+        <Stat
+          title="Active Orders"
+          value={activeOrders}
+          color="text-[#D4AF37]"
+        />
         <Stat
           title="Total Spent"
           value={`Rs ${totalSpent}`}
           color="text-green-400"
-          subText={`Delivered: ${totalDelivered}`}
+          subText={`Delivered: ${deliveredOrders}`}
         />
       </div>
 
@@ -196,7 +197,7 @@ export default function MyOrdersPage() {
           <button
             key={item}
             onClick={() => setFilter(item)}
-            className={`px-4 py-2 rounded-full text-sm transition cursor-pointer whitespace-nowrap ${
+            className={`px-4 py-2 rounded-full text-sm transition whitespace-nowrap ${
               filter === item
                 ? "bg-[#D4AF37] text-black font-semibold"
                 : "bg-[#0d1117] border border-slate-700 text-gray-300 hover:border-[#D4AF37]/50"
@@ -215,7 +216,7 @@ export default function MyOrdersPage() {
             <OrderCard
               key={order.id}
               order={order}
-              returnRequest={getReturnByOrderId(order.id)}
+              returnRequest={getReturnRequest(order.id)}
               onCancel={cancelOrder}
               onReturn={openReturnModal}
             />
@@ -253,7 +254,6 @@ function EmptyOrders({ filter }) {
   return (
     <div className="border border-slate-700 rounded-2xl p-12 text-center bg-[#0d1117]">
       <p className="text-5xl mb-4">📭</p>
-
       <h2 className="text-xl font-bold text-white mb-2">No Orders Found</h2>
 
       <p className="text-gray-400">
@@ -271,8 +271,11 @@ function EmptyOrders({ filter }) {
 }
 
 function OrderCard({ order, returnRequest, onCancel, onReturn }) {
-  const totalQty =
-    order.items?.reduce((sum, item) => sum + Number(item.quantity || 1), 0) || 0;
+  const totalQuantity =
+    order.items?.reduce(
+      (sum, item) => sum + Number(item.quantity || 1),
+      0
+    ) || 0;
 
   return (
     <Link
@@ -294,7 +297,8 @@ function OrderCard({ order, returnRequest, onCancel, onReturn }) {
           {returnRequest && (
             <span
               className={`px-3 py-1 rounded-full text-xs font-bold border ${
-                returnStatusColor[returnRequest.status]
+                returnStatusColor[returnRequest.status] ||
+                returnStatusColor.Pending
               }`}
             >
               Return {returnRequest.status}
@@ -304,7 +308,7 @@ function OrderCard({ order, returnRequest, onCancel, onReturn }) {
           <span
             className={`${
               orderStatusColor[order.status] || "bg-gray-500"
-            } px-3 py-1 rounded-full text-white text-xs w-fit`}
+            } px-3 py-1 rounded-full text-white text-xs`}
           >
             {order.status}
           </span>
@@ -314,14 +318,12 @@ function OrderCard({ order, returnRequest, onCancel, onReturn }) {
       {order.items?.length > 0 && (
         <div className="space-y-2 mb-4">
           {order.items.slice(0, 3).map((item, index) => (
-            <div key={index} className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-lg overflow-hidden border border-slate-700 shrink-0 bg-slate-900">
-                <img
-                  src={item.product?.image || "/placeholder.png"}
-                  alt={item.product?.name || "Product"}
-                  className="w-full h-full object-cover"
-                />
-              </div>
+            <div key={item.id || index} className="flex items-center gap-3">
+              <img
+                src={item.product?.image || "/placeholder.png"}
+                alt={item.product?.name || "Product"}
+                className="w-12 h-12 rounded-lg object-cover border border-slate-700 bg-slate-900"
+              />
 
               <p className="text-gray-300 text-sm font-semibold truncate">
                 {item.product?.name || "Product"}
@@ -347,10 +349,12 @@ function OrderCard({ order, returnRequest, onCancel, onReturn }) {
       <div className="border-t border-slate-700 pt-4 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
         <div>
           <p className="text-gray-400 text-sm">
-            {totalQty} item{totalQty !== 1 ? "s" : ""}
+            {totalQuantity} item{totalQuantity !== 1 ? "s" : ""}
           </p>
 
-          <p className="text-[#D4AF37] font-bold mt-1">Rs {order.total}</p>
+          <p className="text-[#D4AF37] font-bold mt-1">
+            Rs {order.total}
+          </p>
         </div>
 
         <div className="flex flex-col sm:flex-row gap-3">
@@ -360,17 +364,17 @@ function OrderCard({ order, returnRequest, onCancel, onReturn }) {
 
           {order.status === "Delivered" && !returnRequest && (
             <button
-              onClick={(e) => onReturn(e, order)}
-              className="bg-[#D4AF37] text-black px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer"
+              onClick={(event) => onReturn(event, order)}
+              className="bg-[#D4AF37] text-black px-4 py-2 rounded-lg text-sm font-semibold"
             >
               Return Request
             </button>
           )}
 
-          {order.status !== "Delivered" && order.status !== "Cancelled" && (
+          {!["Delivered", "Cancelled"].includes(order.status) && (
             <button
-              onClick={(e) => onCancel(e, order.id)}
-              className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg text-white text-sm cursor-pointer"
+              onClick={(event) => onCancel(event, order.id)}
+              className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg text-white text-sm"
             >
               Cancel Order
             </button>
@@ -394,16 +398,19 @@ function ReturnModal({
   return (
     <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center px-4">
       <div className="w-full max-w-lg bg-[#0d1117] border border-[#D4AF37]/30 rounded-2xl p-6">
-        <h2 className="text-2xl font-bold text-white mb-2">Return Request</h2>
+        <h2 className="text-2xl font-bold text-white mb-2">
+          Return Request
+        </h2>
 
         <p className="text-gray-400 text-sm mb-5">
           Order: <span className="text-[#D4AF37]">{order.trackingId}</span>
         </p>
 
         <label className="block text-white mb-2">Reason</label>
+
         <select
           value={reason}
-          onChange={(e) => setReason(e.target.value)}
+          onChange={(event) => setReason(event.target.value)}
           className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-3 mb-4 outline-none focus:border-[#D4AF37]"
         >
           <option>Wrong Size</option>
@@ -414,10 +421,11 @@ function ReturnModal({
         </select>
 
         <label className="block text-white mb-2">Message</label>
+
         <textarea
           rows="4"
           value={message}
-          onChange={(e) => setMessage(e.target.value)}
+          onChange={(event) => setMessage(event.target.value)}
           placeholder="Write extra details..."
           className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-3 outline-none resize-none focus:border-[#D4AF37]"
         />
