@@ -36,6 +36,21 @@ const actionStyle = {
   DELETE: "bg-red-500/20 text-red-400 border-red-500/30",
 };
 
+const redButtonClass =
+  "flex shrink-0 items-center justify-center rounded-lg bg-red-600 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-40";
+
+const redButtonStyle = {
+  width: "112px",
+  minWidth: "112px",
+  maxWidth: "112px",
+  height: "42px",
+  minHeight: "42px",
+  maxHeight: "42px",
+};
+
+const paginationButtonClass =
+  "flex h-10 min-w-10 items-center justify-center rounded-lg border border-[#D4AF37]/30 bg-[#0B1F33] px-4 text-sm font-semibold text-white transition hover:bg-[#102840] disabled:cursor-not-allowed disabled:opacity-40";
+
 export default function ActivityLogsPage() {
   const [logs, setLogs] = useState([]);
   const [search, setSearch] = useState("");
@@ -53,12 +68,15 @@ export default function ActivityLogsPage() {
   }, [search, action, entity]);
 
   useEffect(() => {
-    const timer = setTimeout(fetchLogs, 350);
+    const timer = setTimeout(() => {
+      fetchLogs();
+    }, 350);
+
     return () => clearTimeout(timer);
   }, [search, action, entity, page]);
 
   // ==========================
-  // Fetch Logs
+  // Fetch Activity Logs
   // ==========================
 
   const fetchLogs = async () => {
@@ -73,7 +91,9 @@ export default function ActivityLogsPage() {
         limit: String(limit),
       });
 
-      const res = await api.get(`/activity-logs?${params}`);
+      const res = await api.get(
+        `/activity-logs?${params.toString()}`
+      );
 
       setLogs(res.data.logs || []);
       setTotalPages(res.data.totalPages || 1);
@@ -86,7 +106,7 @@ export default function ActivityLogsPage() {
   };
 
   // ==========================
-  // Delete Log
+  // Delete Activity Log
   // ==========================
 
   const deleteLog = async (id) => {
@@ -94,8 +114,16 @@ export default function ActivityLogsPage() {
 
     try {
       await api.delete(`/activity-logs/${id}`);
-      setLogs((prev) => prev.filter((log) => log.id !== id));
+
+      const remainingLogs = logs.filter((log) => log.id !== id);
+
+      setLogs(remainingLogs);
       setTotalLogs((prev) => Math.max(prev - 1, 0));
+
+      if (remainingLogs.length === 0 && page > 1) {
+        setPage((prev) => prev - 1);
+      }
+
       showSuccessToast("Activity log deleted");
     } catch {
       showErrorToast("Failed to delete activity log");
@@ -103,7 +131,7 @@ export default function ActivityLogsPage() {
   };
 
   // ==========================
-  // Clear All Logs
+  // Clear All Activity Logs
   // ==========================
 
   const clearLogs = async () => {
@@ -111,10 +139,12 @@ export default function ActivityLogsPage() {
 
     try {
       await api.delete("/activity-logs");
+
       setLogs([]);
       setTotalLogs(0);
       setTotalPages(1);
       setPage(1);
+
       showSuccessToast("All activity logs cleared");
     } catch {
       showErrorToast("Failed to clear activity logs");
@@ -127,66 +157,80 @@ export default function ActivityLogsPage() {
   );
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-10">
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-5 mb-8">
+    <div className="mx-auto max-w-7xl px-4 py-10">
+      <div className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p className="text-[#D4AF37] text-sm font-semibold uppercase tracking-widest">
+          <p className="text-sm font-semibold uppercase tracking-widest text-[#D4AF37]">
             Admin Panel
           </p>
 
-          <h1 className="text-4xl font-bold text-white mt-2">
+          <h1 className="mt-2 text-4xl font-bold text-white">
             Activity <span className="text-[#D4AF37]">Logs</span>
           </h1>
 
-          <p className="text-gray-400 mt-2">Total Logs: {totalLogs}</p>
+          <p className="mt-2 text-gray-400">
+            Total Logs: {totalLogs}
+          </p>
         </div>
 
         <button
+          type="button"
           onClick={clearLogs}
           disabled={!totalLogs}
-          className="self-start sm:self-auto inline-flex items-center justify-center rounded-full border border-red-500/40 px-5 py-2 text-sm font-semibold text-red-400 transition hover:bg-red-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+          className={redButtonClass}
+          style={redButtonStyle}
         >
           Clear All
         </button>
       </div>
 
-      <div className="grid md:grid-cols-3 gap-4 mb-8">
+      <div className="mb-8 grid gap-4 md:grid-cols-3">
         <input
           type="text"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           placeholder="Search email, message or ID..."
-          className="bg-[#0d1117] border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:border-[#D4AF37]"
+          className="rounded-xl border border-slate-700 bg-[#0d1117] px-4 py-3 text-white outline-none focus:border-[#D4AF37]"
         />
 
         <select
           value={action}
           onChange={(event) => setAction(event.target.value)}
-          className="bg-[#0d1117] border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:border-[#D4AF37]"
+          className="rounded-xl border border-slate-700 bg-[#0d1117] px-4 py-3 text-white outline-none focus:border-[#D4AF37]"
         >
           {actions.map((item) => (
-            <option key={item}>{item}</option>
+            <option key={item} value={item}>
+              {item}
+            </option>
           ))}
         </select>
 
         <select
           value={entity}
           onChange={(event) => setEntity(event.target.value)}
-          className="bg-[#0d1117] border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:border-[#D4AF37]"
+          className="rounded-xl border border-slate-700 bg-[#0d1117] px-4 py-3 text-white outline-none focus:border-[#D4AF37]"
         >
           {entities.map((item) => (
-            <option key={item}>{item}</option>
+            <option key={item} value={item}>
+              {item}
+            </option>
           ))}
         </select>
       </div>
 
       {loading ? (
-        <div className="text-gray-400 text-center py-20">Loading...</div>
+        <div className="py-20 text-center text-gray-400">
+          Loading...
+        </div>
       ) : logs.length === 0 ? (
-        <div className="bg-[#0d1117] border border-slate-700 rounded-2xl p-12 text-center">
-          <p className="text-5xl mb-4">📝</p>
-          <h2 className="text-white text-xl font-bold">No Activity Logs</h2>
-          <p className="text-gray-400 mt-2">
+        <div className="rounded-2xl border border-slate-700 bg-[#0d1117] p-12 text-center">
+          <p className="mb-4 text-5xl">📝</p>
+
+          <h2 className="text-xl font-bold text-white">
+            No Activity Logs
+          </h2>
+
+          <p className="mt-2 text-gray-400">
             Admin actions will appear here.
           </p>
         </div>
@@ -196,75 +240,85 @@ export default function ActivityLogsPage() {
             {logs.map((log) => (
               <div
                 key={log.id}
-                className="bg-[#0d1117] border border-slate-700 rounded-2xl p-5 hover:border-[#D4AF37]/50 transition"
+                className="relative rounded-2xl border border-slate-700 bg-[#0d1117] p-5 transition hover:border-[#D4AF37]/50"
               >
-                <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-5">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-3 mb-3">
-                      <span
-                        className={`px-3 py-1 rounded-full text-xs font-bold border ${
-                          actionStyle[log.action] ||
-                          "bg-slate-700 text-gray-300 border-slate-600"
-                        }`}
-                      >
-                        {log.action}
-                      </span>
+                <div className="pr-0 lg:pr-36">
+                  <div className="mb-3 flex flex-wrap items-center gap-3">
+                    <span
+                      className={`rounded-full border px-3 py-1 text-xs font-bold ${
+                        actionStyle[log.action] ||
+                        "border-slate-600 bg-slate-700 text-gray-300"
+                      }`}
+                    >
+                      {log.action}
+                    </span>
 
-                      <span className="px-3 py-1 rounded-full text-xs font-semibold bg-[#D4AF37]/10 text-[#D4AF37] border border-[#D4AF37]/20">
-                        {log.entity}
-                      </span>
-                    </div>
-
-                    <p className="text-white font-semibold">{log.message}</p>
-
-                    <div className="mt-3 space-y-1 text-sm">
-                      <p className="text-gray-400">
-                        <strong className="text-gray-300">Admin:</strong>{" "}
-                        {log.adminEmail || "System"}
-                      </p>
-
-                      {log.entityId && (
-                        <p className="text-gray-400">
-                          <strong className="text-gray-300">Entity ID:</strong>{" "}
-                          {log.entityId}
-                        </p>
-                      )}
-
-                      <p className="text-gray-500 text-xs">
-                        {new Date(log.createdAt).toLocaleString("en-PK")}
-                      </p>
-                    </div>
+                    <span className="rounded-full border border-[#D4AF37]/20 bg-[#D4AF37]/10 px-3 py-1 text-xs font-semibold text-[#D4AF37]">
+                      {log.entity}
+                    </span>
                   </div>
 
-                  <button
-                    onClick={() => deleteLog(log.id)}
-                    className="self-start lg:ml-auto inline-flex items-center justify-center rounded-full border border-red-500/40 px-4 py-2 text-sm font-semibold text-red-400 transition hover:bg-red-600 hover:text-white"
-                  >
-                    Delete
-                  </button>
+                  <p className="font-semibold text-white">
+                    {log.message}
+                  </p>
+
+                  <div className="mt-3 space-y-1 text-sm">
+                    <p className="text-gray-400">
+                      <strong className="text-gray-300">
+                        Admin:
+                      </strong>{" "}
+                      {log.adminEmail || "System"}
+                    </p>
+
+                    {log.entityId && (
+                      <p className="text-gray-400">
+                        <strong className="text-gray-300">
+                          Entity ID:
+                        </strong>{" "}
+                        {log.entityId}
+                      </p>
+                    )}
+
+                    <p className="text-xs text-gray-500">
+                      {new Date(log.createdAt).toLocaleString("en-PK")}
+                    </p>
+                  </div>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() => deleteLog(log.id)}
+                  className={`${redButtonClass} absolute top-5 right-5`}
+                  style={redButtonStyle}
+                >
+                  Delete
+                </button>
               </div>
             ))}
           </div>
 
           {totalPages > 1 && (
-            <div className="flex justify-center gap-2 flex-wrap mt-10">
+            <div className="mt-10 flex flex-wrap justify-center gap-2">
               <button
-                onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
+                type="button"
+                onClick={() =>
+                  setPage((prev) => Math.max(prev - 1, 1))
+                }
                 disabled={page === 1}
-                className="rounded-full border border-slate-700 bg-[#0d1117] px-4 py-2 text-white transition hover:border-[#D4AF37] disabled:opacity-40"
+                className={paginationButtonClass}
               >
                 Prev
               </button>
 
               {pageNumbers.map((pageNumber) => (
                 <button
+                  type="button"
                   key={pageNumber}
                   onClick={() => setPage(pageNumber)}
-                  className={`w-10 h-10 rounded-full border transition ${
+                  className={`flex h-10 min-w-10 items-center justify-center rounded-lg border px-4 text-sm font-semibold transition ${
                     page === pageNumber
-                      ? "bg-[#D4AF37] text-black border-[#D4AF37]"
-                      : "bg-[#0d1117] text-white border-slate-700 hover:border-[#D4AF37]"
+                      ? "border-[#D4AF37] bg-[#D4AF37] text-black"
+                      : "border-[#D4AF37]/30 bg-[#0B1F33] text-white hover:bg-[#102840]"
                   }`}
                 >
                   {pageNumber}
@@ -272,11 +326,14 @@ export default function ActivityLogsPage() {
               ))}
 
               <button
+                type="button"
                 onClick={() =>
-                  setPage((prev) => Math.min(prev + 1, totalPages))
+                  setPage((prev) =>
+                    Math.min(prev + 1, totalPages)
+                  )
                 }
                 disabled={page === totalPages}
-                className="rounded-full border border-slate-700 bg-[#0d1117] px-4 py-2 text-white transition hover:border-[#D4AF37] disabled:opacity-40"
+                className={paginationButtonClass}
               >
                 Next
               </button>

@@ -38,52 +38,77 @@ export default function OrderDetailPage() {
     if (id) fetchOrder();
   }, [id]);
 
+  // ==========================
+  // Fetch Secure Order Detail
+  // ==========================
+
   const fetchOrder = async () => {
     try {
-      const storedUser = localStorage.getItem("user");
-
-      if (!storedUser) {
+      if (!localStorage.getItem("user")) {
         router.push("/signin");
         return;
       }
 
-      const user = JSON.parse(storedUser);
-
-      const [ordersRes, returnsRes] = await Promise.all([
-        api.get(`/orders/user/${user.email}`),
+      const [orderRes, returnsRes] = await Promise.all([
+        api.get(`/orders/my/${id}`),
         api.get("/return-requests/my"),
       ]);
 
-      setOrder(
-        ordersRes.data.find((item) => String(item.id) === String(id)) || null
-      );
+      setOrder(orderRes.data);
 
       setReturnRequest(
-        returnsRes.data.find(
-          (item) => String(item.orderId) === String(id)
+        returnsRes.data?.find(
+          (item) => Number(item.orderId) === Number(id)
         ) || null
       );
     } catch (error) {
-      console.log(error);
-      showErrorToast("Failed to load order");
+      console.error("Load order error:", error);
+
+      if (error?.response?.status === 401) {
+        router.push("/signin");
+        return;
+      }
+
+      showErrorToast(
+        error?.response?.data?.message || "Failed to load order"
+      );
     } finally {
       setLoading(false);
     }
   };
 
+  // ==========================
+  // Cancel Secure Order
+  // ==========================
+
   const cancelOrder = async () => {
     if (!confirm("Are you sure you want to cancel this order?")) return;
 
     try {
-      await api.put(`/orders/${order.id}/cancel`);
-      setOrder((prev) => ({ ...prev, status: "Cancelled" }));
+      await api.put(`/orders/my/${order.id}/cancel`);
+
+      setOrder((prev) => ({
+        ...prev,
+        status: "Cancelled",
+      }));
+
       showSuccessToast("Order cancelled");
-    } catch {
-      showErrorToast("Unable to cancel order");
+    } catch (error) {
+      showErrorToast(
+        error?.response?.data?.message || "Unable to cancel order"
+      );
     }
   };
 
+  // ==========================
+  // Submit Return Request
+  // ==========================
+
   const submitReturnRequest = async () => {
+    if (!reason.trim()) {
+      return showErrorToast("Please select a return reason");
+    }
+
     try {
       setReturnLoading(true);
 
@@ -122,9 +147,13 @@ export default function OrderDetailPage() {
     return (
       <div className="max-w-5xl mx-auto px-6 py-12 text-center text-white">
         <p className="text-5xl mb-4">📭</p>
-        <h1 className="text-2xl font-bold mb-2">Order not found</h1>
+
+        <h1 className="text-2xl font-bold mb-2">
+          Order not found
+        </h1>
 
         <button
+          type="button"
           onClick={() => router.push("/profile/my-orders")}
           className="mt-4 inline-flex items-center gap-2 bg-[#D4AF37] text-black px-5 py-3 rounded-xl font-semibold hover:scale-105 transition"
         >
@@ -138,6 +167,7 @@ export default function OrderDetailPage() {
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-12">
       <div className="mb-6">
         <button
+          type="button"
           onClick={() => router.push("/profile/my-orders")}
           className="inline-flex items-center gap-2 px-5 py-3 rounded-xl border border-[#D4AF37]/40 text-[#D4AF37] font-semibold hover:bg-[#D4AF37]/10 hover:scale-105 transition"
         >
@@ -153,7 +183,9 @@ export default function OrderDetailPage() {
               Style Avenue
             </p>
 
-            <h1 className="text-3xl font-bold text-white">Order Details</h1>
+            <h1 className="text-3xl font-bold text-white">
+              Order Details
+            </h1>
 
             <p className="text-gray-400 mt-2">
               Tracking ID: {order.trackingId}
@@ -207,10 +239,12 @@ export default function OrderDetailPage() {
 
           <InfoBox title="Order Summary">
             <Line label="Order ID" value={`#${order.id}`} />
+
             <Line
               label="Date"
               value={new Date(order.createdAt).toLocaleDateString("en-PK")}
             />
+
             <Line label="Total Quantity" value={totalQuantity} />
             <Line label="Payment Method" value={order.paymentMethod || "COD"} />
             <Line
@@ -219,7 +253,8 @@ export default function OrderDetailPage() {
             />
 
             <p className="text-[#D4AF37] font-bold text-lg mt-4">
-              Total: Rs {Number(order.total || 0).toLocaleString("en-PK")}
+              Total: Rs{" "}
+              {Number(order.total || 0).toLocaleString("en-PK")}
             </p>
           </InfoBox>
         </div>
@@ -252,13 +287,16 @@ export default function OrderDetailPage() {
                     </p>
 
                     <p className="text-gray-400 text-sm mt-1">
-                      Unit Price: Rs {item.price}
+                      Unit Price: Rs{" "}
+                      {Number(item.price || 0).toLocaleString("en-PK")}
                     </p>
 
                     <p className="text-[#D4AF37] font-semibold mt-2">
                       Subtotal: Rs{" "}
-                      {Number(item.price || 0) *
-                        Number(item.quantity || 1)}
+                      {(
+                        Number(item.price || 0) *
+                        Number(item.quantity || 1)
+                      ).toLocaleString("en-PK")}
                     </p>
                   </div>
                 </div>
@@ -273,6 +311,7 @@ export default function OrderDetailPage() {
 
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
           <button
+            type="button"
             onClick={() => generateInvoicePDF(order, "user")}
             className="px-5 py-3 rounded-lg bg-[#D4AF37] text-black font-semibold hover:scale-105 transition"
           >
@@ -282,6 +321,7 @@ export default function OrderDetailPage() {
           <div className="flex flex-col sm:flex-row gap-3">
             {order.status === "Delivered" && !returnRequest && (
               <button
+                type="button"
                 onClick={() => setReturnOpen(true)}
                 className="px-5 py-3 rounded-lg bg-[#D4AF37] text-black font-semibold hover:scale-105 transition"
               >
@@ -291,6 +331,7 @@ export default function OrderDetailPage() {
 
             {!["Delivered", "Cancelled"].includes(order.status) && (
               <button
+                type="button"
                 onClick={cancelOrder}
                 className="px-5 py-3 rounded-lg bg-red-600 text-white font-semibold hover:bg-red-700 transition"
               >
@@ -329,7 +370,7 @@ function InfoBox({ title, children }) {
 function Line({ label, value }) {
   return (
     <p className="text-gray-300 mt-2">
-      <strong className="text-white">{label}:</strong> {value}
+      <strong className="text-white">{label}:</strong> {value || "N/A"}
     </p>
   );
 }
@@ -352,10 +393,15 @@ function ReturnModal({
         </h2>
 
         <p className="text-gray-400 text-sm mb-5">
-          Order: <span className="text-[#D4AF37]">{order.trackingId}</span>
+          Order:{" "}
+          <span className="text-[#D4AF37]">
+            {order.trackingId}
+          </span>
         </p>
 
-        <label className="block text-white mb-2">Reason</label>
+        <label className="block text-white mb-2">
+          Reason
+        </label>
 
         <select
           value={reason}
@@ -369,7 +415,9 @@ function ReturnModal({
           <option>Other</option>
         </select>
 
-        <label className="block text-white mb-2">Message</label>
+        <label className="block text-white mb-2">
+          Message
+        </label>
 
         <textarea
           rows="4"
@@ -381,13 +429,16 @@ function ReturnModal({
 
         <div className="flex justify-end gap-3 mt-6">
           <button
+            type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-lg border border-slate-600 text-gray-300"
+            disabled={loading}
+            className="px-4 py-2 rounded-lg border border-slate-600 text-gray-300 disabled:opacity-50"
           >
             Cancel
           </button>
 
           <button
+            type="button"
             onClick={onSubmit}
             disabled={loading}
             className="px-5 py-2 rounded-lg bg-[#D4AF37] text-black font-semibold disabled:opacity-60"

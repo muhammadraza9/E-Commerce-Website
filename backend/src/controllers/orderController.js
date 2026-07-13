@@ -11,15 +11,23 @@ const ORDER_STATUSES = [
   "Cancelled",
 ];
 
-const generateTrackingId = () =>
-  `TRK-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
-
 const orderInclude = {
   items: {
     include: {
       product: true,
     },
   },
+};
+
+const generateTrackingId = () =>
+  `TRK-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+
+const sendOrderEmail = async (options) => {
+  try {
+    await sendEmail(options);
+  } catch (error) {
+    console.error("Order email error:", error.message);
+  }
 };
 
 const createLog = (req, data) =>
@@ -29,15 +37,7 @@ const createLog = (req, data) =>
     ...data,
   });
 
-const sendOrderEmail = async ({ to, subject, html }) => {
-  try {
-    await sendEmail({ to, subject, html });
-  } catch (error) {
-    console.error("Order email error:", error.message);
-  }
-};
-
-const restoreOrderStock = async (tx, items) => {
+const restoreStock = async (tx, items) => {
   for (const item of items) {
     await tx.product.update({
       where: { id: item.productId },
@@ -50,11 +50,14 @@ const restoreOrderStock = async (tx, items) => {
   }
 };
 
+// ==========================
+// Create Order
+// ==========================
+
 exports.createOrder = async (req, res) => {
   try {
     const {
       customer,
-      email,
       phone,
       address,
       subtotal,
@@ -68,7 +71,7 @@ exports.createOrder = async (req, res) => {
       items,
     } = req.body;
 
-    if (!customer || !email || !phone || !address) {
+    if (!customer?.trim() || !phone?.trim() || !address?.trim()) {
       return res.status(400).json({
         message: "Customer information is required",
       });
@@ -80,11 +83,39 @@ exports.createOrder = async (req, res) => {
       });
     }
 
+    const user = await prisma.user.findUnique({
+      where: { id: Number(req.user.id) },
+      select: {
+        id: true,
+        email: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        message: "User not found",
+      });
+    }
+
     const normalizedItems = items.map((item) => ({
       productId: Number(item.productId),
       quantity: Number(item.quantity || 1),
       price: Number(item.price || 0),
     }));
+
+    const invalidItem = normalizedItems.some(
+      (item) =>
+        !item.productId ||
+        item.quantity < 1 ||
+        !Number.isFinite(item.price) ||
+        item.price < 0
+    );
+
+    if (invalidItem) {
+      return res.status(400).json({
+        message: "Invalid order items",
+      });
+    }
 
     const products = await prisma.product.findMany({
       where: {
@@ -110,23 +141,22 @@ exports.createOrder = async (req, res) => {
         });
       }
 
-      if (item.quantity < 1 || product.stock < item.quantity) {
+      if (product.stock < item.quantity) {
         return res.status(400).json({
           message: `${product.name} has only ${product.stock} item(s) left`,
         });
       }
     }
 
-    const finalSubtotal =
-      Number(subtotal) ||
-      normalizedItems.reduce(
-        (sum, item) => sum + item.price * item.quantity,
-        0
-      );
+    const calculatedSubtotal = normalizedItems.reduce(
+      (sum, item) => sum + item.price * item.quantity,
+      0
+    );
 
-    const finalDiscount = Number(discountAmount || 0);
-    const finalShipping = Number(shippingFee || 0);
-    const finalTax = Number(taxAmount || 0);
+    const finalSubtotal = Number(subtotal) || calculatedSubtotal;
+    const finalDiscount = Math.max(Number(discountAmount || 0), 0);
+    const finalShipping = Math.max(Number(shippingFee || 0), 0);
+    const finalTax = Math.max(Number(taxAmount || 0), 0);
     const finalTotal =
       Number(grandTotal) ||
       finalSubtotal - finalDiscount + finalShipping + finalTax;
@@ -139,9 +169,9 @@ exports.createOrder = async (req, res) => {
       const createdOrder = await tx.order.create({
         data: {
           trackingId,
-          userId: req.user?.id || null,
+          userId: user.id,
           customer: customer.trim(),
-          email: email.trim().toLowerCase(),
+          email: user.email.toLowerCase(),
           phone: phone.trim(),
           address: address.trim(),
           subtotal: finalSubtotal,
@@ -149,7 +179,7 @@ exports.createOrder = async (req, res) => {
           couponCode: normalizedCoupon,
           shippingFee: finalShipping,
           taxAmount: finalTax,
-          taxPercentage: Number(taxPercentage || 0),
+          taxPercentage: Math.max(Number(taxPercentage || 0), 0),
           grandTotal: finalTotal,
           total: finalTotal,
           paymentMethod,
@@ -205,7 +235,7 @@ exports.createOrder = async (req, res) => {
         message: `Order ${trackingId} received from ${customer}. Total: Rs ${finalTotal}`,
         type: "ORDER",
       }),
-      ...stockAlerts.map(createNotification),
+      ...stockAlerts.map((alert) => createNotification(alert)),
     ]);
 
     const orderDetails = `
@@ -220,7 +250,7 @@ exports.createOrder = async (req, res) => {
 
     await Promise.all([
       sendOrderEmail({
-        to: email,
+        to: user.email,
         subject: "Order Confirmation",
         html: `
           <h2>Thank You For Your Order</h2>
@@ -228,7 +258,6 @@ exports.createOrder = async (req, res) => {
           ${orderDetails}
         `,
       }),
-
       process.env.ADMIN_EMAIL
         ? sendOrderEmail({
             to: process.env.ADMIN_EMAIL,
@@ -236,7 +265,7 @@ exports.createOrder = async (req, res) => {
             html: `
               <h2>New Order Received</h2>
               <p><strong>Customer:</strong> ${customer}</p>
-              <p><strong>Email:</strong> ${email}</p>
+              <p><strong>Email:</strong> ${user.email}</p>
               <p><strong>Phone:</strong> ${phone}</p>
               <p><strong>Address:</strong> ${address}</p>
               ${orderDetails}
@@ -260,11 +289,79 @@ exports.createOrder = async (req, res) => {
   }
 };
 
+// ==========================
+// Public Tracking
+// ==========================
+
 exports.getOrder = async (req, res) => {
   try {
     const order = await prisma.order.findUnique({
       where: {
         trackingId: req.params.trackingId,
+      },
+      select: {
+        trackingId: true,
+        status: true,
+        createdAt: true,
+        paymentMethod: true,
+        paymentStatus: true,
+      },
+    });
+
+    if (!order) {
+      return res.status(404).json({
+        message: "Order not found",
+      });
+    }
+
+    res.json(order);
+  } catch (error) {
+    res.status(500).json({
+      message: "Failed to track order",
+      error: error.message,
+    });
+  }
+};
+
+// ==========================
+// Customer Orders
+// ==========================
+
+exports.getMyOrders = async (req, res) => {
+  try {
+    const orders = await prisma.order.findMany({
+      where: {
+        userId: Number(req.user.id),
+      },
+      include: orderInclude,
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    res.json(orders);
+  } catch (error) {
+    res.status(500).json({
+      message: "Failed to load your orders",
+      error: error.message,
+    });
+  }
+};
+
+exports.getMyOrderById = async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+
+    if (!id) {
+      return res.status(400).json({
+        message: "Invalid order ID",
+      });
+    }
+
+    const order = await prisma.order.findFirst({
+      where: {
+        id,
+        userId: Number(req.user.id),
       },
       include: orderInclude,
     });
@@ -283,6 +380,74 @@ exports.getOrder = async (req, res) => {
     });
   }
 };
+
+exports.cancelMyOrder = async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+
+    if (!id) {
+      return res.status(400).json({
+        message: "Invalid order ID",
+      });
+    }
+
+    const existing = await prisma.order.findFirst({
+      where: {
+        id,
+        userId: Number(req.user.id),
+      },
+      include: {
+        items: true,
+      },
+    });
+
+    if (!existing) {
+      return res.status(404).json({
+        message: "Order not found",
+      });
+    }
+
+    if (["Delivered", "Cancelled"].includes(existing.status)) {
+      return res.status(400).json({
+        message: "Delivered or cancelled orders cannot be cancelled",
+      });
+    }
+
+    const order = await prisma.$transaction(async (tx) => {
+      await restoreStock(tx, existing.items);
+
+      return tx.order.update({
+        where: { id },
+        data: {
+          status: "Cancelled",
+        },
+      });
+    });
+
+    await createNotification({
+      title: "Order Cancelled",
+      message: `Order ${order.trackingId} has been cancelled.`,
+      type: "ORDER",
+    });
+
+    res.json({
+      success: true,
+      message: "Order cancelled successfully",
+      order,
+    });
+  } catch (error) {
+    console.error("Cancel order error:", error.message);
+
+    res.status(500).json({
+      message: "Failed to cancel order",
+      error: error.message,
+    });
+  }
+};
+
+// ==========================
+// Admin Orders
+// ==========================
 
 exports.getAllOrders = async (req, res) => {
   try {
@@ -302,59 +467,14 @@ exports.getAllOrders = async (req, res) => {
   }
 };
 
-exports.getMyOrders = async (req, res) => {
-  try {
-    const email = req.params.email.trim().toLowerCase();
-
-    const orders = await prisma.order.findMany({
-      where: { email },
-      include: orderInclude,
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
-
-    res.json(orders);
-  } catch (error) {
-    res.status(500).json({
-      message: "Failed to load user orders",
-      error: error.message,
-    });
-  }
-};
-
-exports.getOrderById = async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-
-    const order = await prisma.order.findUnique({
-      where: { id },
-      include: orderInclude,
-    });
-
-    if (!order) {
-      return res.status(404).json({
-        message: "Order not found",
-      });
-    }
-
-    res.json(order);
-  } catch (error) {
-    res.status(500).json({
-      message: "Failed to load order",
-      error: error.message,
-    });
-  }
-};
-
 exports.updateOrderStatus = async (req, res) => {
   try {
     const id = Number(req.params.id);
     const { status } = req.body;
 
-    if (!ORDER_STATUSES.includes(status)) {
+    if (!id || !ORDER_STATUSES.includes(status)) {
       return res.status(400).json({
-        message: "Invalid order status",
+        message: "Invalid order ID or status",
       });
     }
 
@@ -379,9 +499,15 @@ exports.updateOrderStatus = async (req, res) => {
       });
     }
 
+    if (existing.status === "Cancelled") {
+      return res.status(400).json({
+        message: "Cancelled order status cannot be changed",
+      });
+    }
+
     const order = await prisma.$transaction(async (tx) => {
-      if (status === "Cancelled" && existing.status !== "Cancelled") {
-        await restoreOrderStock(tx, existing.items);
+      if (status === "Cancelled") {
+        await restoreStock(tx, existing.items);
       }
 
       return tx.order.update({
@@ -390,32 +516,33 @@ exports.updateOrderStatus = async (req, res) => {
       });
     });
 
-    await createNotification({
-      title: "Order Status Updated",
-      message: `Order ${order.trackingId} status changed to ${status}.`,
-      type: "ORDER",
-    });
-
-    await createLog(req, {
-      action: "UPDATE_STATUS",
-      entity: "ORDER",
-      entityId: order.id,
-      message: `Changed order ${order.trackingId} status from ${existing.status} to ${status}`,
-    });
-
-    await sendOrderEmail({
-      to: order.email,
-      subject: "Order Status Updated",
-      html: `
-        <h2>Order Status Updated</h2>
-        <p>Hello ${order.customer},</p>
-        <p><strong>Tracking ID:</strong> ${order.trackingId}</p>
-        <p><strong>Status:</strong> ${status}</p>
-      `,
-    });
+    await Promise.all([
+      createNotification({
+        title: "Order Status Updated",
+        message: `Order ${order.trackingId} status changed to ${status}.`,
+        type: "ORDER",
+      }),
+      createLog(req, {
+        action: "UPDATE_STATUS",
+        entity: "ORDER",
+        entityId: order.id,
+        message: `Changed order ${order.trackingId} from ${existing.status} to ${status}`,
+      }),
+      sendOrderEmail({
+        to: order.email,
+        subject: "Order Status Updated",
+        html: `
+          <h2>Order Status Updated</h2>
+          <p>Hello ${order.customer},</p>
+          <p><strong>Tracking ID:</strong> ${order.trackingId}</p>
+          <p><strong>Status:</strong> ${status}</p>
+        `,
+      }),
+    ]);
 
     res.json({
       success: true,
+      message: "Order status updated successfully",
       order,
     });
   } catch (error) {
@@ -423,67 +550,6 @@ exports.updateOrderStatus = async (req, res) => {
 
     res.status(500).json({
       message: "Failed to update order status",
-      error: error.message,
-    });
-  }
-};
-
-exports.cancelOrder = async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-
-    const existing = await prisma.order.findUnique({
-      where: { id },
-      include: {
-        items: true,
-      },
-    });
-
-    if (!existing) {
-      return res.status(404).json({
-        message: "Order not found",
-      });
-    }
-
-    if (["Delivered", "Cancelled"].includes(existing.status)) {
-      return res.status(400).json({
-        message: "Delivered or cancelled orders cannot be cancelled",
-      });
-    }
-
-    const order = await prisma.$transaction(async (tx) => {
-      await restoreOrderStock(tx, existing.items);
-
-      return tx.order.update({
-        where: { id },
-        data: {
-          status: "Cancelled",
-        },
-      });
-    });
-
-    await createNotification({
-      title: "Order Cancelled",
-      message: `Order ${order.trackingId} has been cancelled.`,
-      type: "ORDER",
-    });
-
-    await createLog(req, {
-      action: "CANCEL",
-      entity: "ORDER",
-      entityId: order.id,
-      message: `Cancelled order ${order.trackingId}`,
-    });
-
-    res.json({
-      success: true,
-      order,
-    });
-  } catch (error) {
-    console.error("Cancel order error:", error.message);
-
-    res.status(500).json({
-      message: "Failed to cancel order",
       error: error.message,
     });
   }

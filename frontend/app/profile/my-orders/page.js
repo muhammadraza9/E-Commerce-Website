@@ -52,23 +52,33 @@ export default function MyOrdersPage() {
       return;
     }
 
-    const parsedUser = JSON.parse(storedUser);
-    setUser(parsedUser);
-    fetchData(parsedUser.email);
+    try {
+      setUser(JSON.parse(storedUser));
+      fetchData();
+    } catch {
+      localStorage.removeItem("user");
+      router.push("/signin");
+    }
   }, [router]);
 
-  const fetchData = async (email) => {
+  // ==========================
+  // Fetch Orders and Returns
+  // ==========================
+
+  const fetchData = async () => {
     try {
       const [ordersRes, returnsRes] = await Promise.all([
-        api.get(`/orders/user/${email}`),
+        api.get("/orders/my"),
         api.get("/return-requests/my"),
       ]);
 
       setOrders(ordersRes.data || []);
       setReturns(returnsRes.data || []);
     } catch (error) {
-      console.log(error);
-      showErrorToast("Failed to load orders");
+      console.error("Load orders error:", error);
+      showErrorToast(
+        error?.response?.data?.message || "Failed to load orders"
+      );
     } finally {
       setLoading(false);
     }
@@ -77,6 +87,10 @@ export default function MyOrdersPage() {
   const getReturnRequest = (orderId) =>
     returns.find((item) => Number(item.orderId) === Number(orderId));
 
+  // ==========================
+  // Cancel Order
+  // ==========================
+
   const cancelOrder = async (event, orderId) => {
     event.preventDefault();
     event.stopPropagation();
@@ -84,7 +98,7 @@ export default function MyOrdersPage() {
     if (!confirm("Are you sure you want to cancel this order?")) return;
 
     try {
-      await api.put(`/orders/${orderId}/cancel`);
+      await api.put(`/orders/my/${orderId}/cancel`);
 
       setOrders((prev) =>
         prev.map((order) =>
@@ -93,10 +107,16 @@ export default function MyOrdersPage() {
       );
 
       showSuccessToast("Order cancelled");
-    } catch {
-      showErrorToast("Unable to cancel order");
+    } catch (error) {
+      showErrorToast(
+        error?.response?.data?.message || "Unable to cancel order"
+      );
     }
   };
+
+  // ==========================
+  // Return Request
+  // ==========================
 
   const openReturnModal = (event, order) => {
     event.preventDefault();
@@ -155,8 +175,8 @@ export default function MyOrdersPage() {
 
   if (!user) {
     return (
-      <div className="text-center py-20 text-white">
-        Please Login to view your orders
+      <div className="py-20 text-center text-white">
+        Please login to view your orders.
       </div>
     );
   }
@@ -179,14 +199,16 @@ export default function MyOrdersPage() {
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
         <Stat title="Total Orders" value={orders.length} />
+
         <Stat
           title="Active Orders"
           value={activeOrders}
           color="text-[#D4AF37]"
         />
+
         <Stat
           title="Total Spent"
-          value={`Rs ${totalSpent}`}
+          value={`Rs ${totalSpent.toLocaleString("en-PK")}`}
           color="text-green-400"
           subText={`Delivered: ${deliveredOrders}`}
         />
@@ -195,6 +217,7 @@ export default function MyOrdersPage() {
       <div className="flex gap-2 mb-8 overflow-x-auto pb-2">
         {filters.map((item) => (
           <button
+            type="button"
             key={item}
             onClick={() => setFilter(item)}
             className={`px-4 py-2 rounded-full text-sm transition whitespace-nowrap ${
@@ -242,7 +265,7 @@ export default function MyOrdersPage() {
 
 function Stat({ title, value, color = "text-white", subText }) {
   return (
-    <div className="border border-slate-700 rounded-2xl p-5 bg-[#0d1117]">
+    <div className="bg-[#0d1117] border border-slate-700 rounded-2xl p-5">
       <p className="text-gray-400 text-sm">{title}</p>
       <h2 className={`text-2xl font-bold mt-1 ${color}`}>{value}</h2>
       {subText && <p className="text-gray-500 text-xs mt-1">{subText}</p>}
@@ -252,9 +275,12 @@ function Stat({ title, value, color = "text-white", subText }) {
 
 function EmptyOrders({ filter }) {
   return (
-    <div className="border border-slate-700 rounded-2xl p-12 text-center bg-[#0d1117]">
+    <div className="bg-[#0d1117] border border-slate-700 rounded-2xl p-12 text-center">
       <p className="text-5xl mb-4">📭</p>
-      <h2 className="text-xl font-bold text-white mb-2">No Orders Found</h2>
+
+      <h2 className="text-xl font-bold text-white mb-2">
+        No Orders Found
+      </h2>
 
       <p className="text-gray-400">
         You do not have any {filter !== "All" ? filter : ""} orders yet.
@@ -318,7 +344,10 @@ function OrderCard({ order, returnRequest, onCancel, onReturn }) {
       {order.items?.length > 0 && (
         <div className="space-y-2 mb-4">
           {order.items.slice(0, 3).map((item, index) => (
-            <div key={item.id || index} className="flex items-center gap-3">
+            <div
+              key={item.id || index}
+              className="flex items-center gap-3"
+            >
               <img
                 src={item.product?.image || "/placeholder.png"}
                 alt={item.product?.name || "Product"}
@@ -327,6 +356,7 @@ function OrderCard({ order, returnRequest, onCancel, onReturn }) {
 
               <p className="text-gray-300 text-sm font-semibold truncate">
                 {item.product?.name || "Product"}
+
                 {item.quantity > 1 && (
                   <span className="text-gray-500 font-normal">
                     {" "}
@@ -353,7 +383,7 @@ function OrderCard({ order, returnRequest, onCancel, onReturn }) {
           </p>
 
           <p className="text-[#D4AF37] font-bold mt-1">
-            Rs {order.total}
+            Rs {Number(order.total || 0).toLocaleString("en-PK")}
           </p>
         </div>
 
@@ -364,6 +394,7 @@ function OrderCard({ order, returnRequest, onCancel, onReturn }) {
 
           {order.status === "Delivered" && !returnRequest && (
             <button
+              type="button"
               onClick={(event) => onReturn(event, order)}
               className="bg-[#D4AF37] text-black px-4 py-2 rounded-lg text-sm font-semibold"
             >
@@ -373,6 +404,7 @@ function OrderCard({ order, returnRequest, onCancel, onReturn }) {
 
           {!["Delivered", "Cancelled"].includes(order.status) && (
             <button
+              type="button"
               onClick={(event) => onCancel(event, order.id)}
               className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg text-white text-sm"
             >
@@ -432,13 +464,16 @@ function ReturnModal({
 
         <div className="flex justify-end gap-3 mt-6">
           <button
+            type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-lg border border-slate-600 text-gray-300"
+            disabled={loading}
+            className="px-4 py-2 rounded-lg border border-slate-600 text-gray-300 disabled:opacity-50"
           >
             Cancel
           </button>
 
           <button
+            type="button"
             onClick={onSubmit}
             disabled={loading}
             className="px-5 py-2 rounded-lg bg-[#D4AF37] text-black font-semibold disabled:opacity-60"

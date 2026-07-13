@@ -6,11 +6,13 @@ const createActivityLog = require("../utils/createActivityLog");
 
 const PASSWORD_MIN = 4;
 const PASSWORD_MAX = 9;
+
 const USER_SELECT = {
   id: true,
   username: true,
   email: true,
   role: true,
+  profileImage: true,
   createdAt: true,
 };
 
@@ -26,13 +28,19 @@ const logAdminAction = (req, data) =>
     ...data,
   });
 
+// ==========================
+// Register
+// ==========================
+
 exports.register = async (req, res) => {
   try {
     const { username, email, password } = req.body;
     const normalizedEmail = normalizeEmail(email);
 
     if (!username?.trim() || !normalizedEmail || !password) {
-      return res.status(400).json({ message: "All fields are required" });
+      return res.status(400).json({
+        message: "All fields are required",
+      });
     }
 
     if (!validPassword(password)) {
@@ -41,12 +49,14 @@ exports.register = async (req, res) => {
       });
     }
 
-    const exists = await prisma.user.findUnique({
+    const existing = await prisma.user.findUnique({
       where: { email: normalizedEmail },
     });
 
-    if (exists) {
-      return res.status(400).json({ message: "User already exists" });
+    if (existing) {
+      return res.status(400).json({
+        message: "User already exists",
+      });
     }
 
     const user = await prisma.user.create({
@@ -67,9 +77,14 @@ exports.register = async (req, res) => {
   }
 };
 
+// ==========================
+// Login
+// ==========================
+
 exports.login = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const email = normalizeEmail(req.body.email);
+    const { password } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({
@@ -78,11 +93,13 @@ exports.login = async (req, res) => {
     }
 
     const user = await prisma.user.findUnique({
-      where: { email: normalizeEmail(email) },
+      where: { email },
     });
 
     if (!user || !(await bcrypt.compare(password, user.password))) {
-      return res.status(400).json({ message: "Invalid Credentials" });
+      return res.status(400).json({
+        message: "Invalid credentials",
+      });
     }
 
     const token = jwt.sign(
@@ -95,7 +112,14 @@ exports.login = async (req, res) => {
       { expiresIn: "7d" }
     );
 
-    const { password: _, resetOtp, resetOtpExpiry, ...safeUser } = user;
+    const safeUser = {
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      role: user.role,
+      profileImage: user.profileImage || null,
+      createdAt: user.createdAt,
+    };
 
     if (user.role === "ADMIN") {
       await createActivityLog({
@@ -121,12 +145,18 @@ exports.login = async (req, res) => {
   }
 };
 
+// ==========================
+// Forgot Password
+// ==========================
+
 exports.forgotPassword = async (req, res) => {
   try {
     const email = normalizeEmail(req.body.email);
 
     if (!email) {
-      return res.status(400).json({ message: "Email is required" });
+      return res.status(400).json({
+        message: "Email is required",
+      });
     }
 
     const user = await prisma.user.findUnique({
@@ -168,7 +198,9 @@ exports.forgotPassword = async (req, res) => {
       `,
     });
 
-    res.json({ message: "OTP sent to your email" });
+    res.json({
+      message: "OTP sent to your email",
+    });
   } catch (error) {
     res.status(500).json({
       message: "Failed to send OTP",
@@ -176,6 +208,10 @@ exports.forgotPassword = async (req, res) => {
     });
   }
 };
+
+// ==========================
+// Reset Password
+// ==========================
 
 exports.resetPassword = async (req, res) => {
   try {
@@ -197,7 +233,9 @@ exports.resetPassword = async (req, res) => {
       where: {
         email: normalizeEmail(email),
         resetOtp: otp.trim(),
-        resetOtpExpiry: { gt: new Date() },
+        resetOtpExpiry: {
+          gt: new Date(),
+        },
       },
     });
 
@@ -216,7 +254,9 @@ exports.resetPassword = async (req, res) => {
       },
     });
 
-    res.json({ message: "Password reset successfully" });
+    res.json({
+      message: "Password reset successfully",
+    });
   } catch (error) {
     res.status(500).json({
       message: "Password reset failed",
@@ -225,17 +265,45 @@ exports.resetPassword = async (req, res) => {
   }
 };
 
+// ==========================
+// Update Profile
+// ==========================
+
 exports.updateProfile = async (req, res) => {
   try {
+    const userId = Number(req.user.id);
     const username = req.body.username?.trim();
+    const email = normalizeEmail(req.body.email);
+    const profileImage = req.body.profileImage?.trim() || null;
 
-    if (!username) {
-      return res.status(400).json({ message: "Username is required" });
+    if (!username || !email) {
+      return res.status(400).json({
+        message: "Username and email are required",
+      });
+    }
+
+    const existingEmail = await prisma.user.findFirst({
+      where: {
+        email,
+        NOT: {
+          id: userId,
+        },
+      },
+    });
+
+    if (existingEmail) {
+      return res.status(400).json({
+        message: "Email is already in use",
+      });
     }
 
     const user = await prisma.user.update({
-      where: { id: Number(req.user.id) },
-      data: { username },
+      where: { id: userId },
+      data: {
+        username,
+        email,
+        profileImage,
+      },
       select: USER_SELECT,
     });
 
@@ -250,6 +318,10 @@ exports.updateProfile = async (req, res) => {
     });
   }
 };
+
+// ==========================
+// Change Password
+// ==========================
 
 exports.changePassword = async (req, res) => {
   try {
@@ -278,10 +350,17 @@ exports.changePassword = async (req, res) => {
     });
 
     if (!user) {
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({
+        message: "User not found",
+      });
     }
 
-    if (!(await bcrypt.compare(oldPassword, user.password))) {
+    const passwordMatches = await bcrypt.compare(
+      oldPassword,
+      user.password
+    );
+
+    if (!passwordMatches) {
       return res.status(400).json({
         message: "Old password is incorrect",
       });
@@ -294,7 +373,9 @@ exports.changePassword = async (req, res) => {
       },
     });
 
-    res.json({ message: "Password changed successfully" });
+    res.json({
+      message: "Password changed successfully",
+    });
   } catch (error) {
     res.status(500).json({
       message: "Password change failed",
@@ -303,11 +384,17 @@ exports.changePassword = async (req, res) => {
   }
 };
 
+// ==========================
+// Get All Users
+// ==========================
+
 exports.getAllUsers = async (req, res) => {
   try {
     const users = await prisma.user.findMany({
       select: USER_SELECT,
-      orderBy: { createdAt: "desc" },
+      orderBy: {
+        createdAt: "desc",
+      },
     });
 
     res.json(users);
@@ -318,6 +405,10 @@ exports.getAllUsers = async (req, res) => {
     });
   }
 };
+
+// ==========================
+// Update User Role
+// ==========================
 
 exports.updateUserRole = async (req, res) => {
   try {
@@ -342,7 +433,9 @@ exports.updateUserRole = async (req, res) => {
     });
 
     if (!existing) {
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({
+        message: "User not found",
+      });
     }
 
     if (existing.role === role) {
@@ -377,12 +470,18 @@ exports.updateUserRole = async (req, res) => {
   }
 };
 
+// ==========================
+// Delete User
+// ==========================
+
 exports.deleteUser = async (req, res) => {
   try {
     const id = Number(req.params.id);
 
     if (!id) {
-      return res.status(400).json({ message: "Invalid user ID" });
+      return res.status(400).json({
+        message: "Invalid user ID",
+      });
     }
 
     if (Number(req.user.id) === id) {
@@ -397,7 +496,9 @@ exports.deleteUser = async (req, res) => {
     });
 
     if (!user) {
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({
+        message: "User not found",
+      });
     }
 
     await prisma.user.delete({

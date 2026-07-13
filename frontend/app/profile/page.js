@@ -1,14 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import api from "@/services/api";
 import Link from "next/link";
+import { FiCamera } from "react-icons/fi";
+import api from "@/services/api";
 import ProfileSkeleton from "@/components/skeletons/ProfileSkeleton";
 import { showSuccessToast, showErrorToast } from "@/utils/toast";
 
+const statusColors = {
+  Pending: "bg-yellow-500",
+  Processing: "bg-blue-500",
+  Shipped: "bg-purple-500",
+  Delivered: "bg-green-500",
+  Cancelled: "bg-red-600",
+};
+
 export default function ProfilePage() {
   const router = useRouter();
+  const fileInputRef = useRef(null);
 
   const [user, setUser] = useState(null);
   const [orders, setOrders] = useState([]);
@@ -17,6 +27,11 @@ export default function ProfilePage() {
   const [passwordOpen, setPasswordOpen] = useState(false);
 
   const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
+  const [profileImage, setProfileImage] = useState("");
+  const [imagePreview, setImagePreview] = useState("");
+  const [imageFile, setImageFile] = useState(null);
+
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
 
@@ -24,7 +39,15 @@ export default function ProfilePage() {
   const [pageLoading, setPageLoading] = useState(true);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
+    loadProfile();
+  }, [router]);
+
+  // ==========================
+  // Load Profile
+  // ==========================
+
+  const loadProfile = async () => {
+    try {
       const storedUser = localStorage.getItem("user");
 
       if (!storedUser) {
@@ -36,56 +59,155 @@ export default function ProfilePage() {
 
       setUser(userData);
       setUsername(userData.username || userData.name || "");
-      fetchOrders(userData.email);
-      setPageLoading(false);
-    }, 500);
+      setEmail(userData.email || "");
+      setProfileImage(userData.profileImage || "");
+      setImagePreview(userData.profileImage || "");
 
-    return () => clearTimeout(timer);
-  }, [router]);
-
-  const fetchOrders = async (email) => {
-    try {
-      const res = await api.get(`/orders/user/${email}`);
+      const res = await api.get("/orders/my");
       setOrders(res.data || []);
     } catch (error) {
-      console.log(error);
+      console.error("Profile load error:", error);
+      showErrorToast("Failed to load profile");
+    } finally {
+      setPageLoading(false);
     }
   };
 
-  const handleUpdateProfile = async (e) => {
-    e.preventDefault();
+  // ==========================
+  // Select Image
+  // ==========================
 
-    if (!username.trim()) {
-      showErrorToast("Username is required");
+  const handleImageSelect = (event) => {
+    const file = event.target.files?.[0];
+
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      showErrorToast("Please select a valid image");
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      showErrorToast("Image size must be less than 5MB");
+      return;
+    }
+
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
+  };
+
+  // ==========================
+  // Upload Image
+  // ==========================
+
+  const uploadImage = async () => {
+    if (!imageFile) return profileImage;
+
+    const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+    const uploadPreset =
+      process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
+
+    if (!cloudName || !uploadPreset) {
+      throw new Error("Cloudinary configuration is missing");
+    }
+
+    const formData = new FormData();
+
+    formData.append("file", imageFile);
+    formData.append("upload_preset", uploadPreset);
+
+    const response = await fetch(
+      `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+      {
+        method: "POST",
+        body: formData,
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok || !data.secure_url) {
+      throw new Error(data?.error?.message || "Image upload failed");
+    }
+
+    return data.secure_url;
+  };
+
+  // ==========================
+  // Open Edit Form
+  // ==========================
+
+  const openEditProfile = () => {
+    setUsername(user.username || user.name || "");
+    setEmail(user.email || "");
+    setProfileImage(user.profileImage || "");
+    setImagePreview(user.profileImage || "");
+    setImageFile(null);
+
+    setEditOpen((prev) => !prev);
+    setPasswordOpen(false);
+  };
+
+  // ==========================
+  // Update Profile
+  // ==========================
+
+  const handleUpdateProfile = async (event) => {
+    event.preventDefault();
+
+    if (!username.trim() || !email.trim()) {
+      showErrorToast("Username and email are required");
       return;
     }
 
     try {
       setLoading(true);
 
+      const uploadedImage = await uploadImage();
+
       const res = await api.put("/auth/profile", {
         username: username.trim(),
+        email: email.trim().toLowerCase(),
+        profileImage: uploadedImage,
       });
 
-      const updatedUser = res.data.user;
+      const updatedUser = {
+        ...res.data.user,
+        profileImage:
+          res.data.user?.profileImage || uploadedImage || "",
+      };
 
       localStorage.setItem("user", JSON.stringify(updatedUser));
       window.dispatchEvent(new Event("authChange"));
 
       setUser(updatedUser);
+      setUsername(updatedUser.username || "");
+      setEmail(updatedUser.email || "");
+      setProfileImage(updatedUser.profileImage || "");
+      setImagePreview(updatedUser.profileImage || "");
+      setImageFile(null);
       setEditOpen(false);
 
       showSuccessToast("Profile updated successfully");
     } catch (error) {
-      console.log(error);
-      showErrorToast(error?.response?.data?.message || "Profile update failed");
+      console.error("Profile update error:", error);
+
+      showErrorToast(
+        error?.response?.data?.message ||
+          error.message ||
+          "Profile update failed"
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  const handleChangePassword = async (e) => {
-    e.preventDefault();
+  // ==========================
+  // Change Password
+  // ==========================
+
+  const handleChangePassword = async (event) => {
+    event.preventDefault();
 
     if (!oldPassword.trim() || !newPassword.trim()) {
       showErrorToast("Please fill both password fields");
@@ -110,14 +232,15 @@ export default function ProfilePage() {
         newPassword,
       });
 
-      showSuccessToast("Password changed successfully");
-
       setOldPassword("");
       setNewPassword("");
       setPasswordOpen(false);
+
+      showSuccessToast("Password changed successfully");
     } catch (error) {
-      console.log(error);
-      showErrorToast(error?.response?.data?.message || "Password change failed");
+      showErrorToast(
+        error?.response?.data?.message || "Password change failed"
+      );
     } finally {
       setLoading(false);
     }
@@ -126,37 +249,24 @@ export default function ProfilePage() {
   const getInitials = (name) =>
     (name || "U")
       .split(" ")
-      .map((w) => w[0])
+      .map((word) => word[0])
       .join("")
-      .substring(0, 2)
+      .slice(0, 2)
       .toUpperCase();
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case "Pending":
-        return "bg-yellow-500";
-      case "Processing":
-        return "bg-blue-500";
-      case "Shipped":
-        return "bg-purple-500";
-      case "Delivered":
-        return "bg-green-500";
-      case "Cancelled":
-        return "bg-red-600";
-      default:
-        return "bg-gray-500";
-    }
-  };
+  const getStatusColor = (status) =>
+    statusColors[status] || "bg-gray-500";
 
   if (pageLoading || !user) {
     return <ProfileSkeleton />;
   }
 
-  const latestTrackingId = orders.length > 0 ? orders[0]?.trackingId : "";
+  const latestTrackingId = orders[0]?.trackingId || "";
   const recentOrders = orders.slice(0, 3);
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-12">
+      {/* Profile Card */}
       <div className="border border-slate-700 rounded-2xl p-8 mb-6">
         <div className="flex flex-col items-center gap-4 text-center">
           <div
@@ -166,37 +276,46 @@ export default function ProfilePage() {
               borderRadius: "50%",
               border: "3px solid #D4AF37",
             }}
-            className="bg-[#D4AF37]/20 flex items-center justify-center text-[#D4AF37] font-bold text-2xl"
+            className="bg-[#D4AF37]/20 overflow-hidden flex items-center justify-center text-[#D4AF37] font-bold text-2xl"
           >
-            {getInitials(user?.username || user?.name)}
+            {user.profileImage ? (
+              <img
+                src={user.profileImage}
+                alt={user.username || "Profile"}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              getInitials(user.username || user.name)
+            )}
           </div>
 
           <div>
             <h1 className="text-2xl font-bold">
-              {user?.username || user?.name}
+              {user.username || user.name}
             </h1>
 
-            <p className="text-gray-400 text-sm mt-1">{user?.email}</p>
+            <p className="text-gray-400 text-sm mt-1">
+              {user.email}
+            </p>
 
             <span className="inline-block mt-3 text-xs px-3 py-1 rounded-full bg-[#D4AF37]/20 text-[#D4AF37]">
-              {user?.role}
+              {user.role}
             </span>
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3 mt-3">
             <button
-              onClick={() => {
-                setEditOpen(!editOpen);
-                setPasswordOpen(false);
-              }}
+              type="button"
+              onClick={openEditProfile}
               className="px-5 py-2 rounded-lg bg-[#D4AF37] text-[#001F14] font-semibold hover:scale-105 transition"
             >
               Edit Profile
             </button>
 
             <button
+              type="button"
               onClick={() => {
-                setPasswordOpen(!passwordOpen);
+                setPasswordOpen((prev) => !prev);
                 setEditOpen(false);
               }}
               className="px-5 py-2 rounded-lg border border-[#D4AF37]/40 text-[#D4AF37] font-semibold hover:bg-[#D4AF37]/10 transition"
@@ -207,21 +326,92 @@ export default function ProfilePage() {
         </div>
       </div>
 
+      {/* Edit Profile */}
       {editOpen && (
         <form
           onSubmit={handleUpdateProfile}
           className="border border-slate-700 rounded-2xl p-6 mb-6"
         >
-          <h2 className="text-xl font-bold mb-4">Edit Profile</h2>
+          <h2 className="text-xl font-bold mb-6">
+            Edit Profile
+          </h2>
 
-          <label className="block text-sm text-gray-400 mb-2">Username</label>
+          <div className="flex justify-center mb-7">
+            <div
+              className="relative"
+              style={{
+                width: 100,
+                height: 100,
+              }}
+            >
+              <div
+                style={{
+                  width: 100,
+                  height: 100,
+                  borderRadius: "50%",
+                  border: "3px solid #D4AF37",
+                }}
+                className="bg-[#D4AF37]/20 overflow-hidden flex items-center justify-center text-[#D4AF37] font-bold text-2xl"
+              >
+                {imagePreview ? (
+                  <img
+                    src={imagePreview}
+                    alt="Profile Preview"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  getInitials(username)
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                aria-label="Upload profile image"
+                className="absolute flex items-center justify-center rounded-full bg-[#0d1117] border-2 border-white text-white hover:bg-[#D4AF37] hover:text-black transition z-10"
+                style={{
+                  width: 34,
+                  height: 34,
+                  right: 0,
+                  bottom: 0,
+                }}
+              >
+                <FiCamera size={17} />
+              </button>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageSelect}
+                className="hidden"
+              />
+            </div>
+          </div>
+
+          <label className="block text-sm text-gray-400 mb-2">
+            Username
+          </label>
 
           <input
             type="text"
             value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            className="w-full bg-transparent border border-slate-700 rounded-lg px-4 py-3 outline-none focus:border-[#D4AF37]"
+            onChange={(event) => setUsername(event.target.value)}
+            className="w-full bg-transparent border border-slate-700 rounded-lg px-4 py-3 outline-none focus:border-[#D4AF37] mb-4"
             placeholder="Enter username"
+            required
+          />
+
+          <label className="block text-sm text-gray-400 mb-2">
+            Email Address
+          </label>
+
+          <input
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            className="w-full bg-transparent border border-slate-700 rounded-lg px-4 py-3 outline-none focus:border-[#D4AF37]"
+            placeholder="Enter email address"
             required
           />
 
@@ -235,12 +425,15 @@ export default function ProfilePage() {
         </form>
       )}
 
+      {/* Change Password */}
       {passwordOpen && (
         <form
           onSubmit={handleChangePassword}
           className="border border-slate-700 rounded-2xl p-6 mb-6"
         >
-          <h2 className="text-xl font-bold mb-4">Change Password</h2>
+          <h2 className="text-xl font-bold mb-4">
+            Change Password
+          </h2>
 
           <label className="block text-sm text-gray-400 mb-2">
             Old Password
@@ -249,7 +442,7 @@ export default function ProfilePage() {
           <input
             type="password"
             value={oldPassword}
-            onChange={(e) => setOldPassword(e.target.value)}
+            onChange={(event) => setOldPassword(event.target.value)}
             className="w-full bg-transparent border border-slate-700 rounded-lg px-4 py-3 outline-none focus:border-[#D4AF37] mb-4"
             placeholder="Enter old password"
             required
@@ -262,7 +455,7 @@ export default function ProfilePage() {
           <input
             type="password"
             value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
+            onChange={(event) => setNewPassword(event.target.value)}
             className="w-full bg-transparent border border-slate-700 rounded-lg px-4 py-3 outline-none focus:border-[#D4AF37]"
             placeholder="Enter new password"
             required
@@ -284,6 +477,7 @@ export default function ProfilePage() {
         </form>
       )}
 
+      {/* Navigation Cards */}
       <div className="grid grid-cols-2 gap-4 mb-6">
         <Link
           href="/profile/my-orders"
@@ -320,9 +514,12 @@ export default function ProfilePage() {
         </Link>
       </div>
 
+      {/* Recent Orders */}
       <div className="border border-slate-700 rounded-2xl p-8">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold">Recent Orders</h2>
+          <h2 className="text-xl font-bold">
+            Recent Orders
+          </h2>
 
           {orders.length > 3 && (
             <Link
@@ -334,25 +531,33 @@ export default function ProfilePage() {
           )}
         </div>
 
-        {orders.length === 0 ? (
+        {recentOrders.length === 0 ? (
           <div className="text-center py-8">
             <p className="text-4xl mb-3">📭</p>
-            <p className="text-gray-400">No Orders Found</p>
+            <p className="text-gray-400">
+              No Orders Found
+            </p>
           </div>
         ) : (
           <div className="space-y-4">
             {recentOrders.map((order) => (
               <div
                 key={order.id}
-                onClick={() => router.push(`/profile/my-orders/${order.id}`)}
+                onClick={() =>
+                  router.push(`/profile/my-orders/${order.id}`)
+                }
                 className="border border-slate-700 rounded-xl p-5 hover:border-[#D4AF37] hover:bg-[#D4AF37]/5 transition-all duration-300 cursor-pointer"
               >
                 <div className="flex justify-between items-center">
                   <div>
-                    <p className="font-semibold">{order.trackingId}</p>
+                    <p className="font-semibold">
+                      {order.trackingId}
+                    </p>
 
                     <p className="text-gray-400 text-sm mt-1">
-                      {new Date(order.createdAt).toLocaleDateString("en-PK")}
+                      {new Date(order.createdAt).toLocaleDateString(
+                        "en-PK"
+                      )}
                     </p>
                   </div>
 
@@ -366,7 +571,8 @@ export default function ProfilePage() {
                 </div>
 
                 <p className="text-[#D4AF37] mt-3 font-semibold">
-                  Rs {order.total}
+                  Rs{" "}
+                  {Number(order.total || 0).toLocaleString("en-PK")}
                 </p>
 
                 <p className="text-xs text-gray-500 mt-2">
