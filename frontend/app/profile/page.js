@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { FiCamera } from "react-icons/fi";
 import api from "@/services/api";
+import ProfilePhotoEditor from "@/components/ProfilePhotoEditor";
 import ProfileSkeleton from "@/components/skeletons/ProfileSkeleton";
 import { showSuccessToast, showErrorToast } from "@/utils/toast";
 
@@ -18,7 +18,6 @@ const statusColors = {
 
 export default function ProfilePage() {
   const router = useRouter();
-  const fileInputRef = useRef(null);
 
   const [user, setUser] = useState(null);
   const [orders, setOrders] = useState([]);
@@ -28,6 +27,7 @@ export default function ProfilePage() {
 
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
+
   const [profileImage, setProfileImage] = useState("");
   const [imagePreview, setImagePreview] = useState("");
   const [imageFile, setImageFile] = useState(null);
@@ -40,7 +40,13 @@ export default function ProfilePage() {
 
   useEffect(() => {
     loadProfile();
-  }, [router]);
+
+    return () => {
+      if (imagePreview?.startsWith("blob:")) {
+        URL.revokeObjectURL(imagePreview);
+      }
+    };
+  }, []);
 
   // ==========================
   // Load Profile
@@ -51,7 +57,7 @@ export default function ProfilePage() {
       const storedUser = localStorage.getItem("user");
 
       if (!storedUser) {
-        router.push("/signin");
+        router.replace("/signin");
         return;
       }
 
@@ -63,47 +69,39 @@ export default function ProfilePage() {
       setProfileImage(userData.profileImage || "");
       setImagePreview(userData.profileImage || "");
 
-      const res = await api.get("/orders/my");
-      setOrders(res.data || []);
+      setPageLoading(false);
+
+      try {
+        const response = await api.get("/orders/my");
+        setOrders(response.data || []);
+      } catch (error) {
+        console.error("Load orders error:", error);
+        setOrders([]);
+      }
     } catch (error) {
       console.error("Profile load error:", error);
-      showErrorToast("Failed to load profile");
+
+      localStorage.removeItem("user");
+      localStorage.removeItem("token");
+
+      router.replace("/signin");
     } finally {
       setPageLoading(false);
     }
   };
 
   // ==========================
-  // Select Image
-  // ==========================
-
-  const handleImageSelect = (event) => {
-    const file = event.target.files?.[0];
-
-    if (!file) return;
-
-    if (!file.type.startsWith("image/")) {
-      showErrorToast("Please select a valid image");
-      return;
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      showErrorToast("Image size must be less than 5MB");
-      return;
-    }
-
-    setImageFile(file);
-    setImagePreview(URL.createObjectURL(file));
-  };
-
-  // ==========================
-  // Upload Image
+  // Upload Profile Image
   // ==========================
 
   const uploadImage = async () => {
-    if (!imageFile) return profileImage;
+    if (!imageFile) {
+      return profileImage;
+    }
 
-    const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+    const cloudName =
+      process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+
     const uploadPreset =
       process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
 
@@ -115,6 +113,7 @@ export default function ProfilePage() {
 
     formData.append("file", imageFile);
     formData.append("upload_preset", uploadPreset);
+    formData.append("folder", "style-avenue/profile-images");
 
     const response = await fetch(
       `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
@@ -127,14 +126,16 @@ export default function ProfilePage() {
     const data = await response.json();
 
     if (!response.ok || !data.secure_url) {
-      throw new Error(data?.error?.message || "Image upload failed");
+      throw new Error(
+        data?.error?.message || "Image upload failed"
+      );
     }
 
     return data.secure_url;
   };
 
   // ==========================
-  // Open Edit Form
+  // Open Edit Profile
   // ==========================
 
   const openEditProfile = () => {
@@ -144,7 +145,7 @@ export default function ProfilePage() {
     setImagePreview(user.profileImage || "");
     setImageFile(null);
 
-    setEditOpen((prev) => !prev);
+    setEditOpen((previous) => !previous);
     setPasswordOpen(false);
   };
 
@@ -165,20 +166,30 @@ export default function ProfilePage() {
 
       const uploadedImage = await uploadImage();
 
-      const res = await api.put("/auth/profile", {
+      const response = await api.put("/auth/profile", {
         username: username.trim(),
         email: email.trim().toLowerCase(),
-        profileImage: uploadedImage,
+        profileImage: uploadedImage || null,
       });
 
       const updatedUser = {
-        ...res.data.user,
+        ...response.data.user,
         profileImage:
-          res.data.user?.profileImage || uploadedImage || "",
+          response.data.user?.profileImage ||
+          uploadedImage ||
+          "",
       };
 
-      localStorage.setItem("user", JSON.stringify(updatedUser));
+      localStorage.setItem(
+        "user",
+        JSON.stringify(updatedUser)
+      );
+
       window.dispatchEvent(new Event("authChange"));
+
+      if (imagePreview?.startsWith("blob:")) {
+        URL.revokeObjectURL(imagePreview);
+      }
 
       setUser(updatedUser);
       setUsername(updatedUser.username || "");
@@ -194,7 +205,7 @@ export default function ProfilePage() {
 
       showErrorToast(
         error?.response?.data?.message ||
-          error.message ||
+          error?.message ||
           "Profile update failed"
       );
     } finally {
@@ -215,12 +226,16 @@ export default function ProfilePage() {
     }
 
     if (newPassword.length < 4 || newPassword.length > 9) {
-      showErrorToast("New password must be 4 to 9 characters");
+      showErrorToast(
+        "New password must be 4 to 9 characters"
+      );
       return;
     }
 
     if (oldPassword === newPassword) {
-      showErrorToast("New password must be different from old password");
+      showErrorToast(
+        "New password must be different from old password"
+      );
       return;
     }
 
@@ -239,7 +254,8 @@ export default function ProfilePage() {
       showSuccessToast("Password changed successfully");
     } catch (error) {
       showErrorToast(
-        error?.response?.data?.message || "Password change failed"
+        error?.response?.data?.message ||
+          "Password change failed"
       );
     } finally {
       setLoading(false);
@@ -315,7 +331,7 @@ export default function ProfilePage() {
             <button
               type="button"
               onClick={() => {
-                setPasswordOpen((prev) => !prev);
+                setPasswordOpen((previous) => !previous);
                 setEditOpen(false);
               }}
               className="px-5 py-2 rounded-lg border border-[#D4AF37]/40 text-[#D4AF37] font-semibold hover:bg-[#D4AF37]/10 transition"
@@ -336,58 +352,21 @@ export default function ProfilePage() {
             Edit Profile
           </h2>
 
-          <div className="flex justify-center mb-7">
-            <div
-              className="relative"
-              style={{
-                width: 100,
-                height: 100,
-              }}
-            >
-              <div
-                style={{
-                  width: 100,
-                  height: 100,
-                  borderRadius: "50%",
-                  border: "3px solid #D4AF37",
-                }}
-                className="bg-[#D4AF37]/20 overflow-hidden flex items-center justify-center text-[#D4AF37] font-bold text-2xl"
-              >
-                {imagePreview ? (
-                  <img
-                    src={imagePreview}
-                    alt="Profile Preview"
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  getInitials(username)
-                )}
-              </div>
+          <ProfilePhotoEditor
+            currentImage={imagePreview || profileImage}
+            username={username}
+            onImageChange={({ file, preview }) => {
+              if (
+                imagePreview?.startsWith("blob:") &&
+                imagePreview !== preview
+              ) {
+                URL.revokeObjectURL(imagePreview);
+              }
 
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                aria-label="Upload profile image"
-                className="absolute flex items-center justify-center rounded-full bg-[#0d1117] border-2 border-white text-white hover:bg-[#D4AF37] hover:text-black transition z-10"
-                style={{
-                  width: 34,
-                  height: 34,
-                  right: 0,
-                  bottom: 0,
-                }}
-              >
-                <FiCamera size={17} />
-              </button>
-
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleImageSelect}
-                className="hidden"
-              />
-            </div>
-          </div>
+              setImageFile(file);
+              setImagePreview(preview);
+            }}
+          />
 
           <label className="block text-sm text-gray-400 mb-2">
             Username
@@ -396,7 +375,9 @@ export default function ProfilePage() {
           <input
             type="text"
             value={username}
-            onChange={(event) => setUsername(event.target.value)}
+            onChange={(event) =>
+              setUsername(event.target.value)
+            }
             className="w-full bg-transparent border border-slate-700 rounded-lg px-4 py-3 outline-none focus:border-[#D4AF37] mb-4"
             placeholder="Enter username"
             required
@@ -409,7 +390,9 @@ export default function ProfilePage() {
           <input
             type="email"
             value={email}
-            onChange={(event) => setEmail(event.target.value)}
+            onChange={(event) =>
+              setEmail(event.target.value)
+            }
             className="w-full bg-transparent border border-slate-700 rounded-lg px-4 py-3 outline-none focus:border-[#D4AF37]"
             placeholder="Enter email address"
             required
@@ -442,7 +425,9 @@ export default function ProfilePage() {
           <input
             type="password"
             value={oldPassword}
-            onChange={(event) => setOldPassword(event.target.value)}
+            onChange={(event) =>
+              setOldPassword(event.target.value)
+            }
             className="w-full bg-transparent border border-slate-700 rounded-lg px-4 py-3 outline-none focus:border-[#D4AF37] mb-4"
             placeholder="Enter old password"
             required
@@ -455,7 +440,9 @@ export default function ProfilePage() {
           <input
             type="password"
             value={newPassword}
-            onChange={(event) => setNewPassword(event.target.value)}
+            onChange={(event) =>
+              setNewPassword(event.target.value)
+            }
             className="w-full bg-transparent border border-slate-700 rounded-lg px-4 py-3 outline-none focus:border-[#D4AF37]"
             placeholder="Enter new password"
             required
@@ -486,7 +473,9 @@ export default function ProfilePage() {
           <span className="text-2xl">📦</span>
 
           <div>
-            <p className="font-semibold text-sm">My Orders</p>
+            <p className="font-semibold text-sm">
+              My Orders
+            </p>
 
             <p className="text-gray-400 text-xs mt-0.5">
               Total Orders: {orders.length}
@@ -505,7 +494,9 @@ export default function ProfilePage() {
           <span className="text-2xl">🚚</span>
 
           <div>
-            <p className="font-semibold text-sm">Track Order</p>
+            <p className="font-semibold text-sm">
+              Track Order
+            </p>
 
             <p className="text-gray-400 text-xs mt-0.5">
               Track your delivery
@@ -534,6 +525,7 @@ export default function ProfilePage() {
         {recentOrders.length === 0 ? (
           <div className="text-center py-8">
             <p className="text-4xl mb-3">📭</p>
+
             <p className="text-gray-400">
               No Orders Found
             </p>
@@ -544,7 +536,9 @@ export default function ProfilePage() {
               <div
                 key={order.id}
                 onClick={() =>
-                  router.push(`/profile/my-orders/${order.id}`)
+                  router.push(
+                    `/profile/my-orders/${order.id}`
+                  )
                 }
                 className="border border-slate-700 rounded-xl p-5 hover:border-[#D4AF37] hover:bg-[#D4AF37]/5 transition-all duration-300 cursor-pointer"
               >
@@ -555,9 +549,9 @@ export default function ProfilePage() {
                     </p>
 
                     <p className="text-gray-400 text-sm mt-1">
-                      {new Date(order.createdAt).toLocaleDateString(
-                        "en-PK"
-                      )}
+                      {new Date(
+                        order.createdAt
+                      ).toLocaleDateString("en-PK")}
                     </p>
                   </div>
 
@@ -572,7 +566,9 @@ export default function ProfilePage() {
 
                 <p className="text-[#D4AF37] mt-3 font-semibold">
                   Rs{" "}
-                  {Number(order.total || 0).toLocaleString("en-PK")}
+                  {Number(
+                    order.total || 0
+                  ).toLocaleString("en-PK")}
                 </p>
 
                 <p className="text-xs text-gray-500 mt-2">
