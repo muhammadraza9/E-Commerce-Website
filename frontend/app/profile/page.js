@@ -31,6 +31,8 @@ export default function ProfilePage() {
   const [profileImage, setProfileImage] = useState("");
   const [imagePreview, setImagePreview] = useState("");
   const [imageFile, setImageFile] = useState(null);
+  const [removeProfileImage, setRemoveProfileImage] =
+    useState(false);
 
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -40,12 +42,6 @@ export default function ProfilePage() {
 
   useEffect(() => {
     loadProfile();
-
-    return () => {
-      if (imagePreview?.startsWith("blob:")) {
-        URL.revokeObjectURL(imagePreview);
-      }
-    };
   }, []);
 
   // ==========================
@@ -95,8 +91,12 @@ export default function ProfilePage() {
   // ==========================
 
   const uploadImage = async () => {
+    if (removeProfileImage) {
+      return null;
+    }
+
     if (!imageFile) {
-      return profileImage;
+      return profileImage || null;
     }
 
     const cloudName =
@@ -144,6 +144,7 @@ export default function ProfilePage() {
     setProfileImage(user.profileImage || "");
     setImagePreview(user.profileImage || "");
     setImageFile(null);
+    setRemoveProfileImage(false);
 
     setEditOpen((previous) => !previous);
     setPasswordOpen(false);
@@ -169,14 +170,14 @@ export default function ProfilePage() {
       const response = await api.put("/auth/profile", {
         username: username.trim(),
         email: email.trim().toLowerCase(),
-        profileImage: uploadedImage || null,
+        profileImage: uploadedImage,
       });
 
       const updatedUser = {
         ...response.data.user,
         profileImage:
-          response.data.user?.profileImage ||
-          uploadedImage ||
+          response.data.user?.profileImage ??
+          uploadedImage ??
           "",
       };
 
@@ -187,16 +188,13 @@ export default function ProfilePage() {
 
       window.dispatchEvent(new Event("authChange"));
 
-      if (imagePreview?.startsWith("blob:")) {
-        URL.revokeObjectURL(imagePreview);
-      }
-
       setUser(updatedUser);
       setUsername(updatedUser.username || "");
       setEmail(updatedUser.email || "");
       setProfileImage(updatedUser.profileImage || "");
       setImagePreview(updatedUser.profileImage || "");
       setImageFile(null);
+      setRemoveProfileImage(false);
       setEditOpen(false);
 
       showSuccessToast("Profile updated successfully");
@@ -264,7 +262,8 @@ export default function ProfilePage() {
 
   const getInitials = (name) =>
     (name || "U")
-      .split(" ")
+      .trim()
+      .split(/\s+/)
       .map((word) => word[0])
       .join("")
       .slice(0, 2)
@@ -355,16 +354,18 @@ export default function ProfilePage() {
           <ProfilePhotoEditor
             currentImage={imagePreview || profileImage}
             username={username}
-            onImageChange={({ file, preview }) => {
-              if (
-                imagePreview?.startsWith("blob:") &&
-                imagePreview !== preview
-              ) {
-                URL.revokeObjectURL(imagePreview);
+            onImageChange={({ file, preview, remove }) => {
+              if (remove) {
+                setImageFile(null);
+                setImagePreview("");
+                setProfileImage("");
+                setRemoveProfileImage(true);
+                return;
               }
 
               setImageFile(file);
               setImagePreview(preview);
+              setRemoveProfileImage(false);
             }}
           />
 
@@ -465,10 +466,10 @@ export default function ProfilePage() {
       )}
 
       {/* Navigation Cards */}
-      <div className="grid grid-cols-2 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
         <Link
           href="/profile/my-orders"
-          className="border border-slate-700 rounded-2xl p-5 flex items-center gap-3 hover:border-[#D4AF37] hover:bg-[#D4AF37]/10 hover:scale-105 transition-all duration-300"
+          className="border border-slate-700 rounded-2xl p-5 flex items-center gap-3 hover:border-[#D4AF37] hover:bg-[#D4AF37]/10 hover:scale-[1.02] transition-all duration-300"
         >
           <span className="text-2xl">📦</span>
 
@@ -489,7 +490,7 @@ export default function ProfilePage() {
               ? `/track-order?trackingId=${latestTrackingId}`
               : "/track-order"
           }
-          className="border border-slate-700 rounded-2xl p-5 flex items-center gap-3 hover:border-[#D4AF37] hover:bg-[#D4AF37]/10 hover:scale-105 transition-all duration-300"
+          className="border border-slate-700 rounded-2xl p-5 flex items-center gap-3 hover:border-[#D4AF37] hover:bg-[#D4AF37]/10 hover:scale-[1.02] transition-all duration-300"
         >
           <span className="text-2xl">🚚</span>
 
@@ -515,7 +516,7 @@ export default function ProfilePage() {
           {orders.length > 3 && (
             <Link
               href="/profile/my-orders"
-              className="text-[#D4AF37] text-sm font-semibold"
+              className="text-[#D4AF37] text-sm font-semibold hover:underline"
             >
               View All
             </Link>
@@ -542,7 +543,7 @@ export default function ProfilePage() {
                 }
                 className="border border-slate-700 rounded-xl p-5 hover:border-[#D4AF37] hover:bg-[#D4AF37]/5 transition-all duration-300 cursor-pointer"
               >
-                <div className="flex justify-between items-center">
+                <div className="flex justify-between items-center gap-4">
                   <div>
                     <p className="font-semibold">
                       {order.trackingId}

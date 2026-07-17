@@ -1,17 +1,25 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import Cropper from "react-easy-crop";
+import { useEffect, useRef, useState } from "react";
+import ReactCrop, {
+  centerCrop,
+  makeAspectCrop,
+} from "react-image-crop";
+import "react-image-crop/dist/ReactCrop.css";
+
 import {
   FiCamera,
   FiCheck,
   FiCrop,
+  FiTrash2,
   FiX,
 } from "react-icons/fi";
-import { getCroppedImage } from "@/utils/cropImage";
+
 import { showErrorToast } from "@/utils/toast";
 
-const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const OUTPUT_SIZE = 1024;
+const CROP_ASPECT = 1;
 
 export default function ProfilePhotoEditor({
   currentImage = "",
@@ -19,10 +27,14 @@ export default function ProfilePhotoEditor({
   onImageChange,
 }) {
   const fileInputRef = useRef(null);
+  const cropImageRef = useRef(null);
+
   const originalUrlRef = useRef("");
   const croppedUrlRef = useRef("");
 
-  const [avatarPreview, setAvatarPreview] = useState(currentImage);
+  const [avatarPreview, setAvatarPreview] = useState(
+    currentImage
+  );
 
   const [selectedFile, setSelectedFile] = useState(null);
   const [selectedImage, setSelectedImage] = useState("");
@@ -30,16 +42,26 @@ export default function ProfilePhotoEditor({
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [cropMode, setCropMode] = useState(false);
+  const [removeRequested, setRemoveRequested] =
+    useState(false);
 
-  const [crop, setCrop] = useState({ x: 0, y: 0 });
-  const [zoom, setZoom] = useState(1.2);
-  const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
+  const [crop, setCrop] = useState(undefined);
+  const [completedCrop, setCompletedCrop] =
+    useState(null);
 
   const [processing, setProcessing] = useState(false);
+
+  // ==========================
+  // Sync Existing Image
+  // ==========================
 
   useEffect(() => {
     setAvatarPreview(currentImage || "");
   }, [currentImage]);
+
+  // ==========================
+  // Cleanup Temporary URLs
+  // ==========================
 
   useEffect(() => {
     return () => {
@@ -53,6 +75,10 @@ export default function ProfilePhotoEditor({
     };
   }, []);
 
+  // ==========================
+  // Helpers
+  // ==========================
+
   const getInitials = (name) =>
     (name || "U")
       .trim()
@@ -61,6 +87,23 @@ export default function ProfilePhotoEditor({
       .join("")
       .slice(0, 2)
       .toUpperCase();
+
+  const resetCropState = () => {
+    setCrop(undefined);
+    setCompletedCrop(null);
+  };
+
+  const revokeTemporaryUrls = () => {
+    if (originalUrlRef.current) {
+      URL.revokeObjectURL(originalUrlRef.current);
+      originalUrlRef.current = "";
+    }
+
+    if (croppedUrlRef.current) {
+      URL.revokeObjectURL(croppedUrlRef.current);
+      croppedUrlRef.current = "";
+    }
+  };
 
   // ==========================
   // Select Image
@@ -78,19 +121,12 @@ export default function ProfilePhotoEditor({
       return;
     }
 
-    if (file.size > MAX_IMAGE_SIZE) {
+    if (file.size > MAX_FILE_SIZE) {
       showErrorToast("Image size must be less than 10MB");
       return;
     }
 
-    if (originalUrlRef.current) {
-      URL.revokeObjectURL(originalUrlRef.current);
-    }
-
-    if (croppedUrlRef.current) {
-      URL.revokeObjectURL(croppedUrlRef.current);
-      croppedUrlRef.current = "";
-    }
+    revokeTemporaryUrls();
 
     const imageUrl = URL.createObjectURL(file);
 
@@ -100,57 +136,203 @@ export default function ProfilePhotoEditor({
     setSelectedImage(imageUrl);
     setEditorPreview(imageUrl);
 
-    setCrop({ x: 0, y: 0 });
-    setZoom(1.2);
-    setCroppedAreaPixels(null);
+    setRemoveRequested(false);
     setCropMode(false);
+    resetCropState();
 
-    // Preview modal opens first.
-    // Main avatar does not change here.
+    // Main profile avatar abhi change nahi hoga.
+    // Pehle preview modal open hoga.
     setEditorOpen(true);
   };
 
   // ==========================
-  // Crop Controls
+  // Initialize Circle Crop
   // ==========================
 
-  const handleCropComplete = useCallback((_, pixels) => {
-    setCroppedAreaPixels(pixels);
-  }, []);
+  const handleCropImageLoad = (event) => {
+    const image = event.currentTarget;
+
+    const initialCrop = centerCrop(
+      makeAspectCrop(
+        {
+          unit: "%",
+          width: 70,
+        },
+        CROP_ASPECT,
+        image.width,
+        image.height
+      ),
+      image.width,
+      image.height
+    );
+
+    setCrop(initialCrop);
+  };
+
+  // ==========================
+  // Open / Close Crop Mode
+  // ==========================
 
   const openCropMode = () => {
-    setCrop({ x: 0, y: 0 });
-    setZoom(1.2);
-    setCroppedAreaPixels(null);
+    if (!selectedImage) {
+      showErrorToast("Please select an image first");
+      return;
+    }
+
+    resetCropState();
     setCropMode(true);
   };
 
+  const closeCropMode = () => {
+    if (processing) return;
+
+    setCropMode(false);
+    resetCropState();
+  };
+
+  // ==========================
+  // Create Circle Image
+  // ==========================
+
+  const createCroppedImage = async () => {
+    const image = cropImageRef.current;
+
+    if (
+      !image ||
+      !completedCrop?.width ||
+      !completedCrop?.height
+    ) {
+      throw new Error("Please select a crop area");
+    }
+
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d");
+
+    if (!context) {
+      throw new Error("Image crop failed");
+    }
+
+    const scaleX = image.naturalWidth / image.width;
+    const scaleY = image.naturalHeight / image.height;
+
+    const sourceX = completedCrop.x * scaleX;
+    const sourceY = completedCrop.y * scaleY;
+    const sourceWidth =
+      completedCrop.width * scaleX;
+    const sourceHeight =
+      completedCrop.height * scaleY;
+
+    canvas.width = OUTPUT_SIZE;
+    canvas.height = OUTPUT_SIZE;
+
+    context.clearRect(
+      0,
+      0,
+      OUTPUT_SIZE,
+      OUTPUT_SIZE
+    );
+
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = "high";
+
+    // Force circular final image.
+    context.save();
+    context.beginPath();
+    context.arc(
+      OUTPUT_SIZE / 2,
+      OUTPUT_SIZE / 2,
+      OUTPUT_SIZE / 2,
+      0,
+      Math.PI * 2
+    );
+    context.closePath();
+    context.clip();
+
+    context.drawImage(
+      image,
+      sourceX,
+      sourceY,
+      sourceWidth,
+      sourceHeight,
+      0,
+      0,
+      OUTPUT_SIZE,
+      OUTPUT_SIZE
+    );
+
+    context.restore();
+
+    return new Promise((resolve, reject) => {
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            reject(
+              new Error(
+                "Cropped image could not be created"
+              )
+            );
+            return;
+          }
+
+          const file = new File(
+            [blob],
+            `profile-${Date.now()}.png`,
+            {
+              type: "image/png",
+            }
+          );
+
+          resolve({
+            file,
+            preview: URL.createObjectURL(blob),
+          });
+        },
+        "image/png",
+        1
+      );
+    });
+  };
+
+  // ==========================
+  // Apply Crop
+  // ==========================
+
   const applyCrop = async () => {
-    if (!selectedImage || !croppedAreaPixels) {
-      showErrorToast("Please adjust the image first");
+    if (
+      !completedCrop?.width ||
+      !completedCrop?.height
+    ) {
+      showErrorToast(
+        "Please adjust the circular crop area"
+      );
       return;
     }
 
     try {
       setProcessing(true);
 
-      const croppedImage = await getCroppedImage(
-        selectedImage,
-        croppedAreaPixels
-      );
+      const croppedImage =
+        await createCroppedImage();
 
       if (croppedUrlRef.current) {
-        URL.revokeObjectURL(croppedUrlRef.current);
+        URL.revokeObjectURL(
+          croppedUrlRef.current
+        );
       }
 
-      croppedUrlRef.current = croppedImage.preview;
+      croppedUrlRef.current =
+        croppedImage.preview;
 
       setSelectedFile(croppedImage.file);
       setEditorPreview(croppedImage.preview);
+      setRemoveRequested(false);
       setCropMode(false);
+
+      resetCropState();
     } catch (error) {
       showErrorToast(
-        error?.message || "Failed to crop profile image"
+        error?.message ||
+          "Failed to crop profile image"
       );
     } finally {
       setProcessing(false);
@@ -158,10 +340,37 @@ export default function ProfilePhotoEditor({
   };
 
   // ==========================
-  // Save / Close Editor
+  // Remove Photo
+  // ==========================
+
+  const removePhoto = () => {
+    setSelectedFile(null);
+    setSelectedImage("");
+    setEditorPreview("");
+    setRemoveRequested(true);
+    setCropMode(false);
+
+    resetCropState();
+  };
+
+  // ==========================
+  // Save Photo
   // ==========================
 
   const savePhoto = () => {
+    if (removeRequested) {
+      setAvatarPreview("");
+      setEditorOpen(false);
+
+      onImageChange?.({
+        file: null,
+        preview: "",
+        remove: true,
+      });
+
+      return;
+    }
+
     if (!selectedFile || !editorPreview) {
       showErrorToast("Please select an image");
       return;
@@ -174,8 +383,13 @@ export default function ProfilePhotoEditor({
     onImageChange?.({
       file: selectedFile,
       preview: editorPreview,
+      remove: false,
     });
   };
+
+  // ==========================
+  // Close Editor
+  // ==========================
 
   const closeEditor = () => {
     if (processing) return;
@@ -185,7 +399,9 @@ export default function ProfilePhotoEditor({
     setSelectedFile(null);
     setSelectedImage("");
     setEditorPreview("");
-    setCroppedAreaPixels(null);
+    setRemoveRequested(false);
+
+    resetCropState();
   };
 
   return (
@@ -193,13 +409,28 @@ export default function ProfilePhotoEditor({
       {/* Main Profile Avatar */}
       <div className="mb-8 flex justify-center">
         <div className="relative">
-          <div className="flex h-[112px] w-[112px] items-center justify-center overflow-hidden rounded-full border-[3px] border-[#D4AF37] bg-[#D4AF37]/15 text-2xl font-bold text-[#D4AF37] shadow-[0_0_0_5px_rgba(212,175,55,0.08)]">
+          <div
+            className="flex items-center justify-center overflow-hidden border-[3px] border-[#D4AF37] bg-[#D4AF37]/15 text-2xl font-bold text-[#D4AF37] shadow-[0_0_0_5px_rgba(212,175,55,0.08)]"
+            style={{
+              width: "112px",
+              height: "112px",
+              minWidth: "112px",
+              minHeight: "112px",
+              borderRadius: "9999px",
+            }}
+          >
             {avatarPreview ? (
               <img
                 src={avatarPreview}
                 alt={`${username || "User"} profile`}
-                className="h-full w-full object-cover"
                 draggable={false}
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  display: "block",
+                  borderRadius: "9999px",
+                  objectFit: "cover",
+                }}
               />
             ) : (
               getInitials(username)
@@ -208,7 +439,9 @@ export default function ProfilePhotoEditor({
 
           <button
             type="button"
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() =>
+              fileInputRef.current?.click()
+            }
             title="Choose profile photo"
             aria-label="Choose profile photo"
             className="absolute bottom-0 right-0 flex h-9 w-9 items-center justify-center rounded-full border-2 border-white bg-[#0d1117] text-white shadow-xl transition hover:bg-[#D4AF37] hover:text-black"
@@ -226,19 +459,20 @@ export default function ProfilePhotoEditor({
         </div>
       </div>
 
-      {/* Preview / Crop Editor */}
-      {editorOpen && selectedImage && (
+      {/* Photo Editor Modal */}
+      {editorOpen && (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/80 px-4 py-6 backdrop-blur-sm">
-          <div className="w-full max-w-xl overflow-hidden rounded-2xl border border-slate-700 bg-[#0d1117] shadow-2xl">
+          <div className="flex max-h-[94vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-700 bg-[#0d1117] shadow-2xl">
             {/* Header */}
-            <div className="flex items-center justify-between border-b border-slate-700 px-6 py-4">
+            <div className="flex shrink-0 items-center justify-between border-b border-slate-700 px-6 py-4">
               <div>
                 <h2 className="text-lg font-bold text-white">
                   Edit Profile Photo
                 </h2>
 
                 <p className="mt-1 text-sm text-gray-400">
-                  Preview your photo and crop it if needed.
+                  Preview, crop or remove your
+                  profile photo.
                 </p>
               </div>
 
@@ -253,83 +487,138 @@ export default function ProfilePhotoEditor({
               </button>
             </div>
 
-            {/* Preview Mode */}
+            {/* Circle Preview */}
             {!cropMode && (
-              <div className="flex min-h-[430px] items-center justify-center bg-black px-6 py-8">
-                <div className="relative">
-                  <div className="flex h-[330px] w-[330px] max-w-[75vw] items-center justify-center overflow-hidden rounded-full border-[3px] border-[#D4AF37] bg-black">
-                    <img
-                      src={editorPreview}
-                      alt="Selected profile preview"
-                      className="h-full w-full object-cover"
-                      draggable={false}
-                    />
-                  </div>
+              <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto bg-black px-6 py-8">
+                {editorPreview ? (
+                  <>
+                    <div
+                      className="flex items-center justify-center overflow-hidden border-[3px] border-[#D4AF37] bg-black shadow-[0_0_0_6px_rgba(212,175,55,0.08)]"
+                      style={{
+                        width: "320px",
+                        height: "320px",
+                        maxWidth: "72vw",
+                        maxHeight: "72vw",
+                        aspectRatio: "1 / 1",
+                        borderRadius: "9999px",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <img
+                        src={editorPreview}
+                        alt="Selected profile preview"
+                        draggable={false}
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          display: "block",
+                          objectFit: "cover",
+                          borderRadius: "9999px",
+                        }}
+                      />
+                    </div>
 
-                  {/* Crop icon appears on preview avatar */}
-                  <button
-                    type="button"
-                    onClick={openCropMode}
-                    title="Crop and adjust photo"
-                    aria-label="Crop selected photo"
-                    className="absolute right-3 top-3 flex h-11 w-11 items-center justify-center rounded-full border-2 border-[#D4AF37] bg-[#102A43] text-[#D4AF37] shadow-xl transition hover:bg-[#D4AF37] hover:text-black"
-                  >
-                    <FiCrop size={20} />
-                  </button>
-                </div>
+                    <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                      <button
+                        type="button"
+                        onClick={openCropMode}
+                        className="inline-flex items-center gap-2 rounded-lg border border-[#D4AF37] bg-[#D4AF37]/10 px-5 py-2.5 text-sm font-semibold text-[#D4AF37] transition hover:bg-[#D4AF37] hover:text-black"
+                      >
+                        <FiCrop size={17} />
+                        Crop Photo
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={removePhoto}
+                        className="inline-flex items-center gap-2 rounded-lg border border-red-500/50 bg-red-500/10 px-5 py-2.5 text-sm font-semibold text-red-400 transition hover:bg-red-600 hover:text-white"
+                      >
+                        <FiTrash2 size={17} />
+                        Remove Photo
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-center">
+                    <div
+                      className="mx-auto flex items-center justify-center border-[3px] border-[#D4AF37] bg-[#D4AF37]/15 text-4xl font-bold text-[#D4AF37]"
+                      style={{
+                        width: "176px",
+                        height: "176px",
+                        minWidth: "176px",
+                        minHeight: "176px",
+                        borderRadius: "9999px",
+                      }}
+                    >
+                      {getInitials(username)}
+                    </div>
+
+                    <p className="mt-5 text-sm text-gray-400">
+                      Your profile photo will be
+                      removed.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 
-            {/* Crop Mode */}
-            {cropMode && (
-              <div className="relative h-[460px] w-full cursor-grab overflow-hidden bg-black active:cursor-grabbing">
-                <Cropper
-                  image={selectedImage}
-                  crop={crop}
-                  zoom={zoom}
-                  aspect={1}
-                  cropShape="round"
-                  objectFit="cover"
-                  showGrid={false}
-                  restrictPosition={false}
-                  minZoom={0.7}
-                  maxZoom={5}
-                  zoomSpeed={0.12}
-                  zoomWithScroll
-                  onCropChange={setCrop}
-                  onZoomChange={setZoom}
-                  onCropComplete={handleCropComplete}
-                  style={{
-                    containerStyle: {
-                      width: "100%",
-                      height: "100%",
-                      touchAction: "none",
-                      cursor: "grab",
-                    },
-                    mediaStyle: {
-                      userSelect: "none",
-                      WebkitUserSelect: "none",
-                      WebkitUserDrag: "none",
-                      touchAction: "none",
-                    },
-                    cropAreaStyle: {
-                      pointerEvents: "none",
-                      border: "3px solid #D4AF37",
-                      boxShadow:
-                        "0 0 0 9999px rgba(0,0,0,0.68)",
-                    },
-                  }}
-                />
+            {/* Circular Crop Mode */}
+            {cropMode && selectedImage && (
+              <div className="min-h-0 flex-1 overflow-auto bg-black p-5">
+                <div className="flex min-h-full items-center justify-center">
+                  <ReactCrop
+                    crop={crop}
+                    onChange={(
+                      _pixelCrop,
+                      percentCrop
+                    ) => {
+                      setCrop({
+                        ...percentCrop,
+                        width:
+                          percentCrop.width,
+                        height:
+                          percentCrop.width,
+                      });
+                    }}
+                    onComplete={(pixelCrop) => {
+                      setCompletedCrop({
+                        ...pixelCrop,
+                        height: pixelCrop.width,
+                      });
+                    }}
+                    aspect={1}
+                    circularCrop={true}
+                    ruleOfThirds={true}
+                    keepSelection={true}
+                    minWidth={80}
+                    minHeight={80}
+                    className="profile-circle-crop"
+                  >
+                    <img
+                      ref={cropImageRef}
+                      src={selectedImage}
+                      alt="Crop profile photo"
+                      onLoad={handleCropImageLoad}
+                      draggable={false}
+                      className="block max-h-[58vh] max-w-full select-none object-contain"
+                    />
+                  </ReactCrop>
+                </div>
+
+                <p className="mt-4 text-center text-xs text-gray-400">
+                  Move the circular area and resize
+                  it using the handles.
+                </p>
               </div>
             )}
 
             {/* Footer */}
-            <div className="flex items-center justify-end gap-3 border-t border-slate-700 px-6 py-4">
+            <div className="flex shrink-0 items-center justify-end gap-3 border-t border-slate-700 px-6 py-4">
               <button
                 type="button"
                 onClick={
                   cropMode
-                    ? () => setCropMode(false)
+                    ? closeCropMode
                     : closeEditor
                 }
                 disabled={processing}
@@ -346,7 +635,10 @@ export default function ProfilePhotoEditor({
                   className="inline-flex items-center gap-2 rounded-lg bg-[#D4AF37] px-5 py-2.5 text-sm font-semibold text-black transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <FiCrop size={17} />
-                  {processing ? "Applying..." : "Apply Crop"}
+
+                  {processing
+                    ? "Applying..."
+                    : "Apply Crop"}
                 </button>
               ) : (
                 <button
@@ -363,6 +655,47 @@ export default function ProfilePhotoEditor({
           </div>
         </div>
       )}
+
+      {/* Force React Image Crop Circle Styling */}
+      <style jsx global>{`
+        .profile-circle-crop {
+          max-width: 100%;
+        }
+
+        .profile-circle-crop
+          .ReactCrop__crop-selection {
+          border-radius: 50% !important;
+          border: 3px solid #d4af37 !important;
+          box-shadow:
+            0 0 0 9999px rgba(0, 0, 0, 0.67),
+            0 0 0 2px rgba(212, 175, 55, 0.2) !important;
+        }
+
+        .profile-circle-crop
+          .ReactCrop__drag-handle {
+          width: 14px !important;
+          height: 14px !important;
+          border: 2px solid #111827 !important;
+          border-radius: 50% !important;
+          background: #d4af37 !important;
+        }
+
+        .profile-circle-crop
+          .ReactCrop__rule-of-thirds-vt::before,
+        .profile-circle-crop
+          .ReactCrop__rule-of-thirds-vt::after,
+        .profile-circle-crop
+          .ReactCrop__rule-of-thirds-hz::before,
+        .profile-circle-crop
+          .ReactCrop__rule-of-thirds-hz::after {
+          background-color: rgba(
+            255,
+            255,
+            255,
+            0.55
+          ) !important;
+        }
+      `}</style>
     </>
   );
 }

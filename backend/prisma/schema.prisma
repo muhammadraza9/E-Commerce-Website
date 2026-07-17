@@ -66,18 +66,19 @@ model product {
 }
 
 model user {
-  id             Int       @id @default(autoincrement())
-  username       String
-  email          String    @unique
-  password       String
-  role           String    @default("USER")
-  profileImage   String?   @db.LongText
-  resetOtp       String?
-  resetOtpExpiry DateTime?
-  createdAt      DateTime  @default(now())
+  id                   Int       @id @default(autoincrement())
+  username             String
+  email                String    @unique
+  password             String
+  role                 String    @default("USER")
+  profileImage         String?   @db.LongText
+  profileImagePublicId String?
+  resetOtp             String?
+  resetOtpExpiry       DateTime?
+  createdAt            DateTime  @default(now())
 
-  orders         order[]
-  reviews        review[]
+  orders               order[]
+  reviews              review[]
 }
 
 model review {
