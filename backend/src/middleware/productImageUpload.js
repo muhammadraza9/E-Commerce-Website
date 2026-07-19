@@ -1,49 +1,54 @@
 const multer = require("multer");
 
 // ==========================================
-// Multer Memory Storage
+// Memory Storage
 // ==========================================
-// Files are kept in memory so their buffer can be
-// uploaded directly to Cloudinary.
 
 const storage = multer.memoryStorage();
 
 // ==========================================
-// Allowed Image MIME Types
+// Allowed Image Types
 // ==========================================
 
-const allowedImageTypes = new Set([
+const allowedImageTypes = [
   "image/jpeg",
+  "image/jpg",
   "image/png",
   "image/webp",
-]);
+];
 
 // ==========================================
-// Image File Filter
+// File Filter
 // ==========================================
 
-const fileFilter = (req, file, callback) => {
-  if (!allowedImageTypes.has(file.mimetype)) {
-    return callback(
-      new Error("Only JPG, JPEG, PNG, and WEBP images are allowed."),
+const fileFilter = (req, file, cb) => {
+  if (!allowedImageTypes.includes(file.mimetype)) {
+    return cb(
+      new Error(
+        "Only JPG, JPEG, PNG and WEBP images are allowed."
+      ),
       false
     );
   }
 
-  callback(null, true);
+  cb(null, true);
 };
 
 // ==========================================
-// Product Image Upload Middleware
+// Multer Configuration
 // ==========================================
 
 const productImageUpload = multer({
   storage,
   fileFilter,
   limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB
+    fileSize: 5 * 1024 * 1024, // 5 MB
     files: 1,
   },
 });
+
+// ==========================================
+// Export
+// ==========================================
 
 module.exports = productImageUpload;
