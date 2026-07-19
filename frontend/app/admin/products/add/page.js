@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import api from "@/services/api";
 import AddProductSkeleton from "@/components/skeletons/AddProductSkeleton";
-import { showSuccessToast, showErrorToast } from "@/utils/toast";
+import { showErrorToast, showSuccessToast } from "@/utils/toast";
 
 export default function AddProductPage() {
   const router = useRouter();
@@ -34,6 +34,14 @@ export default function AddProductPage() {
     return () => clearTimeout(timer);
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (imagePreview?.startsWith("blob:")) {
+        URL.revokeObjectURL(imagePreview);
+      }
+    };
+  }, [imagePreview]);
+
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
 
@@ -43,15 +51,28 @@ export default function AddProductPage() {
     }));
   };
 
+  const clearImagePreview = () => {
+    if (imagePreview?.startsWith("blob:")) {
+      URL.revokeObjectURL(imagePreview);
+    }
+
+    setImagePreview("");
+  };
+
   const handleImageModeSwitch = (mode) => {
+    clearImagePreview();
+
     setImageMode(mode);
     setImageFile(null);
-    setImagePreview("");
 
     setFormData((prev) => ({
       ...prev,
       image: "",
     }));
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   };
 
   const handleUrlChange = (e) => {
@@ -62,14 +83,17 @@ export default function AddProductPage() {
       image: url,
     }));
 
-    setImagePreview(url);
+    setImagePreview(url.trim());
   };
 
   const validateImageFile = (file) => {
-    if (!file) return false;
+    if (!file) {
+      showErrorToast("Please select an image.");
+      return false;
+    }
 
     if (!file.type.startsWith("image/")) {
-      showErrorToast("Please select an image.");
+      showErrorToast("Please select a valid image file.");
       return false;
     }
 
@@ -81,96 +105,125 @@ export default function AddProductPage() {
     return true;
   };
 
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
+  const setSelectedImageFile = (file) => {
+    if (!validateImageFile(file)) {
+      return;
+    }
 
-    if (!validateImageFile(file)) return;
+    clearImagePreview();
+
+    const previewUrl = URL.createObjectURL(file);
 
     setImageFile(file);
-    setImagePreview(URL.createObjectURL(file));
+    setImagePreview(previewUrl);
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+
+    setSelectedImageFile(file);
   };
 
   const handleDrop = (e) => {
     e.preventDefault();
+    e.stopPropagation();
 
-    const file = e.dataTransfer.files[0];
+    const file = e.dataTransfer.files?.[0];
 
-    if (!validateImageFile(file)) return;
-
-    setImageFile(file);
-    setImagePreview(URL.createObjectURL(file));
+    setSelectedImageFile(file);
   };
 
-  const uploadToCloudinary = async (file) => {
-    const data = new FormData();
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
 
-    data.append("file", file);
-    data.append(
-      "upload_preset",
-      process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET
-    );
+  const validateForm = () => {
+    const name = formData.name.trim();
+    const description = formData.description.trim();
+    const imageUrl = formData.image.trim();
+    const price = Number(formData.price);
+    const stock = Number(formData.stock);
 
-    const cloudRes = await fetch(
-      `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload`,
-      {
-        method: "POST",
-        body: data,
-      }
-    );
-
-    const cloudData = await cloudRes.json();
-
-    if (!cloudData.secure_url) {
-      throw new Error("Image upload failed");
+    if (!name) {
+      showErrorToast("Please enter product name.");
+      return false;
     }
 
-    return cloudData.secure_url;
+    if (!description) {
+      showErrorToast("Please enter product description.");
+      return false;
+    }
+
+    if (imageMode === "url" && !imageUrl) {
+      showErrorToast("Please enter image URL.");
+      return false;
+    }
+
+    if (imageMode === "file" && !imageFile) {
+      showErrorToast("Please upload an image.");
+      return false;
+    }
+
+    if (
+      formData.price === "" ||
+      !Number.isFinite(price) ||
+      price < 0
+    ) {
+      showErrorToast("Please enter a valid product price.");
+      return false;
+    }
+
+    if (
+      formData.stock === "" ||
+      !Number.isInteger(stock) ||
+      stock < 0
+    ) {
+      showErrorToast("Please enter a valid stock quantity.");
+      return false;
+    }
+
+    return true;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (imageMode === "url" && !formData.image.trim()) {
-      showErrorToast("Please enter image URL.");
-      return;
-    }
-
-    if (imageMode === "file" && !imageFile) {
-      showErrorToast("Please upload image.");
-      return;
-    }
-
-    if (Number(formData.price) < 0) {
-      showErrorToast("Price cannot be negative.");
-      return;
-    }
-
-    if (Number(formData.stock) < 0) {
-      showErrorToast("Stock cannot be negative.");
+    if (!validateForm()) {
       return;
     }
 
     try {
       setLoading(true);
 
-      let image = formData.image;
+      const productData = new FormData();
+
+      productData.append("name", formData.name.trim());
+      productData.append("description", formData.description.trim());
+      productData.append("category", formData.category);
+      productData.append("price", String(Number(formData.price)));
+      productData.append("stock", String(Number(formData.stock)));
+      productData.append("featured", String(formData.featured));
 
       if (imageMode === "file") {
-        image = await uploadToCloudinary(imageFile);
+        productData.append("image", imageFile);
+      } else {
+        productData.append("image", formData.image.trim());
       }
 
-      await api.post("/products", {
-        ...formData,
-        image,
-        price: Number(formData.price),
-        stock: Number(formData.stock),
-      });
+      await api.post("/products", productData);
 
-      showSuccessToast("Product Added Successfully");
+      showSuccessToast("Product added successfully.");
       router.push("/admin/products");
+      router.refresh();
     } catch (error) {
-      console.log(error);
-      showErrorToast("Failed to add product.");
+      console.error("Add product error:", error);
+
+      showErrorToast(
+        error.response?.data?.message ||
+          error.response?.data?.error ||
+          "Failed to add product."
+      );
     } finally {
       setLoading(false);
     }
@@ -181,79 +234,99 @@ export default function AddProductPage() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto px-6 py-12">
-      <h1 className="text-4xl font-bold text-white mb-8">
+    <div className="mx-auto max-w-3xl px-6 py-12">
+      <h1 className="mb-8 text-4xl font-bold text-white">
         Add New <span className="text-[#D4AF37]">Product</span>
       </h1>
 
       <form
         onSubmit={handleSubmit}
-        className="bg-slate-900 border border-slate-700 rounded-2xl p-6 space-y-5"
+        encType="multipart/form-data"
+        className="space-y-5 rounded-2xl border border-slate-700 bg-slate-900 p-6"
       >
         <Input
           label="Product Name"
           name="name"
           value={formData.name}
           onChange={handleChange}
+          placeholder="Enter product name"
           required
         />
 
         <div>
-          <label className="block text-white mb-2">Description</label>
+          <label
+            htmlFor="description"
+            className="mb-2 block text-white"
+          >
+            Description
+          </label>
 
           <textarea
+            id="description"
             rows={4}
             name="description"
             value={formData.description}
             onChange={handleChange}
-            className="w-full bg-slate-800 border border-slate-600 text-white p-3 rounded-lg outline-none resize-none focus:border-[#D4AF37]"
+            placeholder="Enter product description"
+            className="w-full resize-none rounded-lg border border-slate-600 bg-slate-800 p-3 text-white outline-none transition focus:border-[#D4AF37]"
             required
           />
         </div>
 
         <div>
-          <label className="block text-white mb-2">Product Image</label>
+          <label className="mb-2 block text-white">
+            Product Image
+          </label>
 
-          <div className="flex gap-2 mb-4">
+          <div className="mb-4 flex gap-2">
             <button
               type="button"
               onClick={() => handleImageModeSwitch("url")}
-              className={`flex-1 py-2 rounded-lg transition ${
+              className={`flex-1 rounded-lg py-2 transition ${
                 imageMode === "url"
-                  ? "bg-[#D4AF37] text-black font-semibold"
-                  : "bg-slate-700 text-gray-300"
+                  ? "bg-[#D4AF37] font-semibold text-black"
+                  : "bg-slate-700 text-gray-300 hover:bg-slate-600"
               }`}
             >
-              URL
+              Image URL
             </button>
 
             <button
               type="button"
               onClick={() => handleImageModeSwitch("file")}
-              className={`flex-1 py-2 rounded-lg transition ${
+              className={`flex-1 rounded-lg py-2 transition ${
                 imageMode === "file"
-                  ? "bg-[#D4AF37] text-black font-semibold"
-                  : "bg-slate-700 text-gray-300"
+                  ? "bg-[#D4AF37] font-semibold text-black"
+                  : "bg-slate-700 text-gray-300 hover:bg-slate-600"
               }`}
             >
-              Upload
+              Upload Image
             </button>
           </div>
 
           {imageMode === "url" ? (
             <input
-              type="text"
+              type="url"
+              name="image"
               value={formData.image}
               onChange={handleUrlChange}
-              placeholder="Paste image URL..."
-              className="w-full bg-slate-800 border border-slate-600 text-white p-3 rounded-lg outline-none focus:border-[#D4AF37]"
+              placeholder="Paste product image URL..."
+              className="w-full rounded-lg border border-slate-600 bg-slate-800 p-3 text-white outline-none transition focus:border-[#D4AF37]"
+              required
             />
           ) : (
             <div
+              role="button"
+              tabIndex={0}
               onDrop={handleDrop}
-              onDragOver={(e) => e.preventDefault()}
-              onClick={() => fileInputRef.current.click()}
-              className="border-2 border-dashed border-slate-600 rounded-xl p-8 text-center cursor-pointer hover:border-[#D4AF37] transition"
+              onDragOver={handleDragOver}
+              onClick={() => fileInputRef.current?.click()}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  fileInputRef.current?.click();
+                }
+              }}
+              className="cursor-pointer rounded-xl border-2 border-dashed border-slate-600 p-8 text-center transition hover:border-[#D4AF37]"
             >
               <input
                 ref={fileInputRef}
@@ -263,48 +336,82 @@ export default function AddProductPage() {
                 onChange={handleFileChange}
               />
 
-              <p className="text-white font-semibold">Upload Image</p>
-
-              <p className="text-gray-400 text-sm mt-2">
-                Drag & drop image here or click to browse
+              <p className="font-semibold text-white">
+                Upload Product Image
               </p>
+
+              <p className="mt-2 text-sm text-gray-400">
+                Drag and drop an image here or click to browse
+              </p>
+
+              <p className="mt-1 text-xs text-gray-500">
+                Maximum image size: 5MB
+              </p>
+
+              {imageFile && (
+                <p className="mt-3 break-all text-sm text-[#D4AF37]">
+                  {imageFile.name}
+                </p>
+              )}
             </div>
           )}
 
           {imagePreview && (
-            <img
-              src={imagePreview}
-              alt="Preview"
-              className="mt-5 w-52 h-52 object-cover rounded-xl border border-slate-700"
-            />
+            <div className="mt-5">
+              <p className="mb-2 text-sm text-gray-400">
+                Image Preview
+              </p>
+
+              <img
+                src={imagePreview}
+                alt="Product preview"
+                onError={() => {
+                  if (imageMode === "url") {
+                    setImagePreview("");
+                    showErrorToast(
+                      "Image preview could not be loaded from this URL."
+                    );
+                  }
+                }}
+                className="h-52 w-52 rounded-xl border border-slate-700 object-cover"
+              />
+            </div>
           )}
         </div>
 
         <div>
-          <label className="block text-white mb-2">Category</label>
+          <label
+            htmlFor="category"
+            className="mb-2 block text-white"
+          >
+            Category
+          </label>
 
           <select
+            id="category"
             name="category"
             value={formData.category}
             onChange={handleChange}
-            className="w-full bg-slate-800 border border-slate-600 text-white p-3 rounded-lg outline-none focus:border-[#D4AF37]"
+            className="w-full rounded-lg border border-slate-600 bg-slate-800 p-3 text-white outline-none transition focus:border-[#D4AF37]"
           >
-            <option>Clothing</option>
-            <option>Shoes</option>
-            <option>Accessories</option>
-            <option>Hoodies</option>
-            <option>T-Shirts</option>
+            <option value="Clothing">Clothing</option>
+            <option value="Shoes">Shoes</option>
+            <option value="Accessories">Accessories</option>
+            <option value="Hoodies">Hoodies</option>
+            <option value="T-Shirts">T-Shirts</option>
           </select>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-5">
+        <div className="grid gap-5 md:grid-cols-2">
           <Input
             label="Price"
             type="number"
             name="price"
             value={formData.price}
             onChange={handleChange}
+            placeholder="Enter price"
             min="0"
+            step="0.01"
             required
           />
 
@@ -314,32 +421,49 @@ export default function AddProductPage() {
             name="stock"
             value={formData.stock}
             onChange={handleChange}
+            placeholder="Enter stock quantity"
             min="0"
+            step="1"
             required
           />
         </div>
 
-        <div className="flex items-center gap-3 bg-slate-800 border border-slate-700 rounded-lg p-4">
+        <div className="flex items-center gap-3 rounded-lg border border-slate-700 bg-slate-800 p-4">
           <input
             type="checkbox"
             id="featured"
             name="featured"
             checked={formData.featured}
             onChange={handleChange}
-            className="w-5 h-5 accent-yellow-500"
+            className="h-5 w-5 accent-yellow-500"
           />
 
-          <label htmlFor="featured" className="text-white cursor-pointer">
+          <label
+            htmlFor="featured"
+            className="cursor-pointer text-white"
+          >
             ⭐ Mark this product as Featured
           </label>
         </div>
 
-        <button
-          disabled={loading}
-          className="w-full bg-[#D4AF37] hover:bg-yellow-400 text-black py-3 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition"
-        >
-          {loading ? "Adding..." : "Add Product"}
-        </button>
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <button
+            type="button"
+            onClick={() => router.push("/admin/products")}
+            disabled={loading}
+            className="w-full rounded-lg border border-slate-600 bg-slate-800 py-3 font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Cancel
+          </button>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full rounded-lg bg-[#D4AF37] py-3 font-semibold text-black transition hover:bg-yellow-400 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {loading ? "Adding Product..." : "Add Product"}
+          </button>
+        </div>
       </form>
     </div>
   );
@@ -352,19 +476,29 @@ function Input({
   onChange,
   type = "text",
   min,
+  step,
+  placeholder,
   required = false,
 }) {
   return (
     <div>
-      <label className="block text-white mb-2">{label}</label>
+      <label
+        htmlFor={name}
+        className="mb-2 block text-white"
+      >
+        {label}
+      </label>
 
       <input
+        id={name}
         type={type}
         name={name}
         value={value}
         onChange={onChange}
         min={min}
-        className="w-full bg-slate-800 border border-slate-600 text-white p-3 rounded-lg outline-none focus:border-[#D4AF37]"
+        step={step}
+        placeholder={placeholder}
+        className="w-full rounded-lg border border-slate-600 bg-slate-800 p-3 text-white outline-none transition focus:border-[#D4AF37]"
         required={required}
       />
     </div>

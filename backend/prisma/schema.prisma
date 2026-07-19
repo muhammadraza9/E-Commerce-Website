@@ -60,6 +60,7 @@ model product {
   featured    Boolean     @default(false)
   stock       Int         @default(0)
   createdAt   DateTime    @default(now())
+  imagePublicId String?
 
   orderitem   orderitem[]
   reviews     review[]

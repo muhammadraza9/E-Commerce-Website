@@ -15,20 +15,44 @@ const {
   verifyAdmin,
 } = require("../middleware/authMiddleware");
 
-// ==========================
-// Public Products
-// ==========================
+const productImageUpload = require("../middleware/productImageUpload");
+
+// =====================
+// Public Routes
+// =====================
 
 router.get("/", getProducts);
 router.get("/featured", getFeaturedProducts);
 router.get("/:id", getProduct);
 
-// ==========================
-// Admin Products
-// ==========================
+// =====================
+// Admin Routes
+// Supports:
+// 1. Image File Upload
+// 2. Image URL
+// =====================
 
-router.post("/", verifyToken, verifyAdmin, createProduct);
-router.put("/:id", verifyToken, verifyAdmin, updateProduct);
-router.delete("/:id", verifyToken, verifyAdmin, deleteProduct);
+router.post(
+  "/",
+  verifyToken,
+  verifyAdmin,
+  productImageUpload.single("image"),
+  createProduct
+);
+
+router.put(
+  "/:id",
+  verifyToken,
+  verifyAdmin,
+  productImageUpload.single("image"),
+  updateProduct
+);
+
+router.delete(
+  "/:id",
+  verifyToken,
+  verifyAdmin,
+  deleteProduct
+);
 
 module.exports = router;
