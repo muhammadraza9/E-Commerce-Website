@@ -3,6 +3,10 @@ const multer = require("multer");
 
 const router = express.Router();
 
+// ==========================================
+// Controllers
+// ==========================================
+
 const {
   register,
   login,
@@ -15,71 +19,74 @@ const {
   deleteUser,
 } = require("../controllers/authController");
 
+// ==========================================
+// Authentication Middleware
+// ==========================================
+
 const {
   verifyToken,
   verifyAdmin,
 } = require("../middleware/authMiddleware");
 
-const profileImageUpload = require(
-  "../middleware/profileImageUpload"
-);
+// ==========================================
+// Image Upload Middleware
+// ==========================================
+// Reusing the existing Multer middleware for profile images.
 
-// ==========================
-// Profile Image Upload Handler
-// ==========================
+const profileImageUpload = require("../middleware/productImageUpload");
+
+// ==========================================
+// Profile Image Upload Error Handler
+// ==========================================
 
 const uploadProfileImage = (req, res, next) => {
-  profileImageUpload.single("profileImage")(
-    req,
-    res,
-    (error) => {
-      if (!error) {
-        return next();
+  const upload = profileImageUpload.single("profileImage");
+
+  upload(req, res, (error) => {
+    if (!error) {
+      return next();
+    }
+
+    if (error instanceof multer.MulterError) {
+      if (error.code === "LIMIT_FILE_SIZE") {
+        return res.status(400).json({
+          message: "Profile image must be smaller than 5MB.",
+        });
       }
 
-      if (error instanceof multer.MulterError) {
-        if (error.code === "LIMIT_FILE_SIZE") {
-          return res.status(400).json({
-            message:
-              "Profile image must be smaller than 10MB.",
-          });
-        }
-
+      if (error.code === "LIMIT_UNEXPECTED_FILE") {
         return res.status(400).json({
-          message: error.message,
+          message:
+            'Only one profile image is allowed using the field name "profileImage".',
         });
       }
 
       return res.status(400).json({
-        message:
-          error.message ||
-          "Invalid profile image upload.",
+        message: error.message || "Profile image upload failed.",
       });
     }
-  );
+
+    return res.status(400).json({
+      message: error.message || "Invalid profile image upload.",
+    });
+  });
 };
 
-// ==========================
-// Public Auth Routes
-// ==========================
+// ==========================================
+// Public Authentication Routes
+// ==========================================
 
 router.post("/register", register);
 
 router.post("/login", login);
 
-router.post(
-  "/forgot-password",
-  forgotPassword
-);
+router.post("/forgot-password", forgotPassword);
 
-router.post(
-  "/reset-password",
-  resetPassword
-);
+router.post("/reset-password", resetPassword);
 
-// ==========================
-// Logged-in User Routes
-// ==========================
+// ==========================================
+// Authenticated User Routes
+// ==========================================
 
 router.put(
   "/profile",
@@ -94,9 +101,9 @@ router.put(
   changePassword
 );
 
-// ==========================
-// Admin User Routes
-// ==========================
+// ==========================================
+// Admin User Management Routes
+// ==========================================
 
 router.get(
   "/users",
@@ -118,5 +125,9 @@ router.delete(
   verifyAdmin,
   deleteUser
 );
+
+// ==========================================
+// Export Router
+// ==========================================
 
 module.exports = router;
