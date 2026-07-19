@@ -1,14 +1,14 @@
 const jwt = require("jsonwebtoken");
 
-// ==========================
-// Verify User Token
-// ==========================
+// ==========================================
+// Verify Authentication Token
+// ==========================================
 
 const verifyToken = (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
 
-    if (!authHeader?.startsWith("Bearer ")) {
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return res.status(401).json({
         message: "Authentication token is required",
       });
@@ -35,8 +35,8 @@ const verifyToken = (req, res, next) => {
 
     req.user = {
       id: Number(decoded.id),
-      email: decoded.email,
-      role: decoded.role,
+      email: decoded.email || null,
+      role: decoded.role || "USER",
     };
 
     return next();
@@ -53,9 +53,9 @@ const verifyToken = (req, res, next) => {
   }
 };
 
-// ==========================
-// Verify Admin
-// ==========================
+// ==========================================
+// Verify Admin Role
+// ==========================================
 
 const verifyAdmin = (req, res, next) => {
   if (!req.user) {

@@ -1,5 +1,4 @@
 const express = require("express");
-const router = express.Router();
 
 const {
   getProducts,
@@ -17,20 +16,24 @@ const {
 
 const productImageUpload = require("../middleware/productImageUpload");
 
-// =====================
-// Public Routes
-// =====================
+const router = express.Router();
+
+// ==========================================
+// Public Product Routes
+// ==========================================
 
 router.get("/", getProducts);
+
 router.get("/featured", getFeaturedProducts);
+
 router.get("/:id", getProduct);
 
-// =====================
-// Admin Routes
+// ==========================================
+// Admin Product Routes
 // Supports:
-// 1. Image File Upload
-// 2. Image URL
-// =====================
+// 1. Multipart image file upload
+// 2. External image URL
+// ==========================================
 
 router.post(
   "/",
