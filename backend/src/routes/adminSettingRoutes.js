@@ -1,3 +1,4 @@
+
 const express = require("express");
 const router = express.Router();
 
@@ -12,7 +13,10 @@ const { verifyToken, verifyAdmin } = require("../middleware/authMiddleware");
 // Admin Settings
 // ==========================
 
-router.get("/", verifyToken, verifyAdmin, getAdminSettings);
+// Get Admin Settings (Public - for footer)
+router.get("/", getAdminSettings);
+
+// Update Admin Settings (Admin Only)
 router.put("/", verifyToken, verifyAdmin, updateAdminSettings);
 
 module.exports = router;
