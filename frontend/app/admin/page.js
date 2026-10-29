@@ -169,7 +169,7 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="px-4 sm:px-6 py-8 max-w-7xl mx-auto">
+    <div className="w-full min-w-0 max-w-7xl mx-auto px-3 py-6 sm:px-6 sm:py-8">
       <div className="mb-8">
         <p className="text-[#D4AF37] text-xs sm:text-sm font-semibold tracking-widest uppercase mb-2">
           Admin Panel

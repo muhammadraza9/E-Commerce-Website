@@ -14,7 +14,7 @@ import {
 
 export default function AdminLayout({ children }) {
   return (
-    <div className="min-h-screen flex bg-slate-950 overflow-hidden">
+    <div className="min-h-screen flex flex-col md:flex-row bg-slate-950">
       {/* Sidebar */}
       <aside className="w-64 min-w-64 shrink-0 bg-slate-900 border-r border-slate-800 p-6 min-h-screen">
         <h1 className="text-2xl font-bold text-white mb-8">
@@ -107,7 +107,7 @@ export default function AdminLayout({ children }) {
       </aside>
 
       {/* Content */}
-      <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-8">
+      <main className="flex-1 w-full min-w-0 max-w-full overflow-x-auto p-4 sm:p-6 md:p-8">
         <div className="w-full max-w-full min-w-0">{children}</div>
       </main>
     </div>
