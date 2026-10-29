@@ -18,9 +18,9 @@ const adapter = new PrismaMariaDb({
   connectTimeout: 30000,
   acquireTimeout: 30000,
   ssl: {
-    ca: fs.readFileSync(caPath, "utf8"),
-    rejectUnauthorized: true,
-  },
+  ca: fs.readFileSync(caPath, "utf8"),
+  rejectUnauthorized: true,
+},
 });
 
 // Reuse Prisma Client
