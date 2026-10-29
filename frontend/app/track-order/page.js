@@ -36,7 +36,7 @@ export default function TrackOrder() {
     try {
       setLoading(true);
 
-      const res = await api.get(`/orders/${trackingId}`);
+      const res = await api.get(`/orders/track/${encodeURIComponent(trackingId.trim())}`);
 
       if (!res.data) {
         showErrorToast("Order not found");
