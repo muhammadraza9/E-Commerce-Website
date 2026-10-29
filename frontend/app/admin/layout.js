@@ -16,7 +16,7 @@ export default function AdminLayout({ children }) {
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-slate-950">
       {/* Sidebar */}
-      <aside className="w-64 min-w-64 shrink-0 bg-slate-900 border-r border-slate-800 p-6 min-h-screen">
+      <aside className="w-full min-w-0 md:w-64 md:min-w-64 shrink-0 bg-slate-900 border-r border-slate-800 p-3 md:p-6 md:min-h-screen">
         <h1 className="text-2xl font-bold text-white mb-8">
           Admin <span className="text-[#D4AF37]">Panel</span>
         </h1>

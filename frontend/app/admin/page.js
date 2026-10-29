@@ -169,7 +169,7 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="w-full min-w-0 max-w-7xl mx-auto px-3 py-6 sm:px-6 sm:py-8">
+    <div className="w-full min-w-0 max-w-7xl mx-auto px-3 py-5 sm:px-6 sm:py-8">
       <div className="mb-8">
         <p className="text-[#D4AF37] text-xs sm:text-sm font-semibold tracking-widest uppercase mb-2">
           Admin Panel
@@ -184,7 +184,7 @@ export default function AdminPage() {
         </p>
       </div>
 
-      <div className="grid lg:grid-cols-6 md:grid-cols-2 gap-5 mb-8">
+      <div className="grid grid-cols-1 min-[400px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-5 mb-8">
         <Card
           title="Total Revenue"
           value={formatCurrency(analytics.totalRevenue)}
@@ -493,7 +493,7 @@ export default function AdminPage() {
           </p>
         </div>
 
-        <div className="h-80">
+        <div className="h-64 sm:h-80 w-full min-w-0">
           {hasGraphData ? (
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={monthlyRevenueData}>
